@@ -6,6 +6,7 @@
 #include "app/ThemeBridge.h"
 
 #include "app/DocumentLimits.h"
+#include "version.h"
 
 #include <QCommandLineParser>
 #include <QApplication>
@@ -25,7 +26,7 @@ int main(int argc, char *argv[]) {
   QApplication app(argc, argv);
   QCoreApplication::setApplicationName(QStringLiteral("omapdf"));
   QCoreApplication::setOrganizationName(QStringLiteral("omapdf"));
-  QCoreApplication::setApplicationVersion(QStringLiteral("0.1.0"));
+  QCoreApplication::setApplicationVersion(QStringLiteral(OMAPDF_VERSION));
   QQuickStyle::setStyle(QStringLiteral("Basic"));
 
   LocaleTranslator translator;

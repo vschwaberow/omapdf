@@ -1,0 +1,3 @@
+#pragma once
+
+#define OMAPDF_VERSION "@PROJECT_VERSION@"

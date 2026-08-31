@@ -22,6 +22,7 @@ class AppController : public QObject {
   Q_PROPERTY(QStringList recents READ recents NOTIFY recentsChanged)
   Q_PROPERTY(bool verbose READ verbose CONSTANT)
   Q_PROPERTY(QUrl pendingLink READ pendingLink NOTIFY pendingLinkChanged)
+  Q_PROPERTY(QString version READ version CONSTANT)
 
 public:
   AppController(SessionStore *store, bool verbose, QObject *parent = nullptr);
@@ -33,6 +34,7 @@ public:
   [[nodiscard]] QStringList recents() const;
   [[nodiscard]] bool verbose() const { return m_verbose; }
   [[nodiscard]] QUrl pendingLink() const { return m_pendingLink; }
+  [[nodiscard]] static QString version();
 
   Q_INVOKABLE void openPaths(const QStringList &paths);
   Q_INVOKABLE void openUrl(const QUrl &url);

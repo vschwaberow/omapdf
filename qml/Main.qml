@@ -69,7 +69,7 @@ ApplicationWindow {
 
     function currentTitle() {
         if (app.currentIndex < 0 || app.currentIndex >= app.tabs.count)
-            return qsTr("omapdf")
+            return qsTr("omapdf") + " " + app.version
         return app.tabTitleAt(app.currentIndex) + " — omapdf"
     }
 

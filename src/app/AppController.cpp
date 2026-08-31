@@ -1,5 +1,7 @@
 #include "app/AppController.h"
 
+#include "version.h"
+
 #include "app/LinkGuard.h"
 
 #include "app/SessionStore.h"
@@ -27,6 +29,11 @@
 
 #include <array>
 #include <memory>
+
+
+QString AppController::version() {
+  return QStringLiteral(OMAPDF_VERSION);
+}
 
 AppController::AppController(SessionStore *store, bool verbose, QObject *parent)
     : QObject(parent), m_store(store), m_verbose(verbose) {

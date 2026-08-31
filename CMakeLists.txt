@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 3.21)
 project(omapdf VERSION 0.1.0 LANGUAGES CXX)
 
+configure_file(
+  ${CMAKE_SOURCE_DIR}/src/version.h.in
+  ${CMAKE_BINARY_DIR}/generated/version.h
+  @ONLY
+)
+
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -30,7 +36,10 @@ add_library(omapdf_core STATIC
   src/app/StructureEngine.cpp
   src/app/LocaleTranslator.cpp
 )
-target_include_directories(omapdf_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_include_directories(omapdf_core PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+  ${CMAKE_BINARY_DIR}/generated
+)
 target_link_libraries(omapdf_core PUBLIC
   Qt6::Core
   Qt6::Gui

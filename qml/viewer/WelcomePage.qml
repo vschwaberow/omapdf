@@ -39,6 +39,13 @@ Rectangle {
             Layout.fillWidth: true
         }
         Text {
+            text: app.version
+            color: theme.darkForeground
+            horizontalAlignment: Text.AlignHCenter
+            font.pixelSize: theme.fontBaseSize - 2
+            Layout.fillWidth: true
+        }
+        Text {
             text: qsTr("Open a PDF, drop files here, or pick a recent document.")
             color: theme.darkForeground
             wrapMode: Text.WordWrap
