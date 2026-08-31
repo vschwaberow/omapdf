@@ -100,7 +100,7 @@ Item {
         doc.source = ""
     }
 
-    readonly property int searchHitCount: view.searchModel.count
+    property int searchHitCount: 0
     readonly property int searchHitIndex: view.searchModel.currentResult < 0
         ? 0
         : view.searchModel.currentResult + 1
@@ -492,10 +492,18 @@ Item {
         }
     }
 
+    function syncSearchHitCount() {
+        root.searchHitCount = view.searchModel.rowCount()
+        root.searchStatsChanged()
+    }
+
     Connections {
         target: view.searchModel
-        function onCountChanged() { root.searchStatsChanged() }
+        function onModelReset() { root.syncSearchHitCount() }
+        function onRowsInserted() { root.syncSearchHitCount() }
+        function onRowsRemoved() { root.syncSearchHitCount() }
         function onCurrentResultChanged() { root.searchStatsChanged() }
+        function onSearchStringChanged() { root.syncSearchHitCount() }
     }
 
     Rectangle {

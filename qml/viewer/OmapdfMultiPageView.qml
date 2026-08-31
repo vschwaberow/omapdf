@@ -327,7 +327,7 @@ Item {
 
     function rebuildSearchHitPages() {
         const pages = {}
-        const n = searchModel.count
+        const n = searchModel.rowCount()
         for (let i = 0; i < n; ++i) {
             const page = searchModel.data(searchModel.index(i, 0), 0x0100)
             if (page !== undefined && page !== null)
@@ -849,8 +849,13 @@ Item {
         id: searchModel
         document: root.document === undefined ? null : root.document
         onCurrentResultChanged: pageNavigator.jump(currentResultLink)
-        onCountChanged: root.rebuildSearchHitPages()
         onSearchStringChanged: root.rebuildSearchHitPages()
+    }
+    Connections {
+        target: searchModel
+        function onModelReset() { root.rebuildSearchHitPages() }
+        function onRowsInserted() { root.rebuildSearchHitPages() }
+        function onRowsRemoved() { root.rebuildSearchHitPages() }
     }
 
     Menu {
