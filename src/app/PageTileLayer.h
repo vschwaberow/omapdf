@@ -1,6 +1,6 @@
 #pragma once
 
-#include "app/ScopedConnection.h"
+#include "app/PdfDocumentBinding.h"
 
 #include <QtQml/qqmlregistration.h>
 
@@ -9,7 +9,7 @@
 #include <QObject>
 #include <QPair>
 #include <QPdfDocument>
-#include <QPointer>
+#include <QPointF>
 #include <QQuickPaintedItem>
 #include <QRect>
 #include <QRectF>
@@ -43,7 +43,7 @@ public:
   explicit PageTileLayer(QQuickItem *parent = nullptr);
   ~PageTileLayer() override;
 
-  [[nodiscard]] QObject *document() const { return m_documentObj.data(); }
+  [[nodiscard]] QObject *document() const { return m_document.source(); }
   void setDocument(QObject *document);
 
   [[nodiscard]] int page() const { return m_page; }
@@ -104,7 +104,6 @@ private:
     bool placeholder{false};
   };
 
-  void resolveDocument();
   void rebuildSourceSize();
   void invalidateGeneration();
   void beginRescale();
@@ -117,14 +116,14 @@ private:
   void pruneStaleTiles();
   void setStatus(int status);
   void markDirty();
+  void paintTilePass(QPainter *painter, bool currentGeneration);
+  void upsertTile(const Tile &tile);
   [[nodiscard]] bool isInflight(const TileKey &key) const;
-  [[nodiscard]] QSize scaledPageSize() const;
-  [[nodiscard]] int tilePixelSize() const;
+  [[nodiscard]] bool hasCurrentTile(const TileKey &key, QSize basis) const;
   [[nodiscard]] QRectF tileDestRect(const Tile &tile) const;
+  [[nodiscard]] QRectF viewportOrFull() const;
 
-  QPointer<QObject> m_documentObj;
-  QPointer<QPdfDocument> m_pdf;
-  ScopedConnection m_statusConn;
+  PdfDocumentBinding m_document;
   int m_page{-1};
   qreal m_renderScale{1.0};
   qreal m_dpr{1.0};
@@ -140,6 +139,4 @@ private:
   QImage m_placeholder;
   QSize m_placeholderBasis;
   QHash<quint64, Inflight> m_inflight;
-  static constexpr int kMaxEdge = 4096;
-  static constexpr int kPrefetchBase = 1;
 };

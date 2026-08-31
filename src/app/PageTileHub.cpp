@@ -1,5 +1,6 @@
 #include "app/PageTileHub.h"
 
+#include "app/DocumentLimits.h"
 #include "app/PageTileLayer.h"
 
 #include <QImage>
@@ -50,7 +51,8 @@ quint64 PageTileHub::request(QPdfDocument *document, int page, QSize imageSize,
   if (page < 0 || imageSize.width() < 1 || imageSize.height() < 1) {
     return 0;
   }
-  if (imageSize.width() > 8192 || imageSize.height() > 8192) {
+  if (imageSize.width() > omapdf::kMaxRequestEdgePx ||
+      imageSize.height() > omapdf::kMaxRequestEdgePx) {
     return 0;
   }
   if (m_document.data() != document) {
@@ -66,15 +68,7 @@ void PageTileHub::cancelFor(PageTileLayer *layer) {
   if (layer == nullptr || m_jobs.isEmpty()) {
     return;
   }
-  QList<quint64> drop;
-  for (auto it = m_jobs.cbegin(); it != m_jobs.cend(); ++it) {
-    if (it.value().layer.data() == layer) {
-      drop.append(it.key());
-    }
-  }
-  for (quint64 id : drop) {
-    m_jobs.remove(id);
-  }
+  eraseJobsIf([layer](const Job &job) { return job.layer.data() == layer; });
 }
 
 void PageTileHub::forgetDocument(QPdfDocument *document) {
@@ -85,13 +79,6 @@ void PageTileHub::forgetDocument(QPdfDocument *document) {
     m_renderer->setDocument(nullptr);
     m_document.clear();
   }
-  QList<quint64> drop;
-  for (auto it = m_jobs.cbegin(); it != m_jobs.cend(); ++it) {
-    if (it.value().document.data() == document) {
-      drop.append(it.key());
-    }
-  }
-  for (quint64 id : drop) {
-    m_jobs.remove(id);
-  }
+  eraseJobsIf(
+      [document](const Job &job) { return job.document.data() == document; });
 }

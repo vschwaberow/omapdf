@@ -17,11 +17,14 @@ public:
   ScopedConnection(ScopedConnection &&other) noexcept
       : m_connection(std::exchange(other.m_connection, {})) {}
   ScopedConnection &operator=(ScopedConnection &&other) noexcept {
-    if (this != &other) {
-      reset();
-      m_connection = std::exchange(other.m_connection, {});
-    }
+    ScopedConnection tmp(std::move(other));
+    swap(tmp);
     return *this;
+  }
+
+  void swap(ScopedConnection &other) noexcept {
+    using std::swap;
+    swap(m_connection, other.m_connection);
   }
 
   void reset(QMetaObject::Connection connection = {}) {

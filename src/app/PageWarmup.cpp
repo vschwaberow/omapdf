@@ -1,6 +1,6 @@
 #include "app/PageWarmup.h"
 
-#include "app/PdfDocumentAccess.h"
+#include "app/DocumentLimits.h"
 
 #include <QPdfPageRenderer>
 
@@ -12,11 +12,12 @@ PageWarmup::PageWarmup(QObject *parent) : QObject(parent) {
 PageWarmup::~PageWarmup() { clearPdf(); }
 
 void PageWarmup::setDocument(QObject *document) {
-  if (m_documentObj.data() == document) {
+  if (m_document.source() == document) {
     return;
   }
-  m_documentObj = document;
-  resolveDocument();
+  clearPdf();
+  m_document.bind(document, this, &PageWarmup::onPdfStatus);
+  m_renderer->setDocument(m_document.document());
   emit documentChanged();
   warmNeighborhood();
 }
@@ -51,9 +52,8 @@ void PageWarmup::setPaused(bool paused) {
 }
 
 void PageWarmup::clearPdf() {
-  m_statusConn.reset();
   m_renderer->setDocument(nullptr);
-  m_pdf.clear();
+  m_document.clear();
 }
 
 void PageWarmup::onPdfStatus(QPdfDocument::Status status) {
@@ -64,32 +64,14 @@ void PageWarmup::onPdfStatus(QPdfDocument::Status status) {
   clearPdf();
 }
 
-void PageWarmup::resolveDocument() {
-  clearPdf();
-  if (m_documentObj.isNull()) {
-    return;
-  }
-  m_pdf = pdfDocumentPtr(m_documentObj.data());
-  m_renderer->setDocument(m_pdf.data());
-  if (m_pdf.isNull()) {
-    return;
-  }
-  m_statusConn.reset(QObject::connect(m_pdf.data(), &QPdfDocument::statusChanged,
-                                      this, &PageWarmup::onPdfStatus));
-}
-
 void PageWarmup::warmNeighborhood() {
-  if (m_paused) {
+  if (m_paused || !m_document.isReady() || m_currentPage < 0) {
     return;
   }
-  if (m_pdf.isNull() || m_pdf->status() != QPdfDocument::Status::Ready) {
-    return;
-  }
-  if (m_currentPage < 0) {
-    return;
-  }
-  const int count = m_pdf->pageCount();
-  for (int delta = -2; delta <= 2; ++delta) {
+  QPdfDocument *pdf = m_document.document();
+  const int count = pdf->pageCount();
+  for (int delta = -omapdf::kWarmupPageRadius; delta <= omapdf::kWarmupPageRadius;
+       ++delta) {
     if (delta == 0) {
       continue;
     }

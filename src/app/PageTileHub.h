@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QHash>
+#include <QList>
 #include <QObject>
 #include <QPointer>
 #include <QSize>
@@ -34,6 +35,19 @@ private:
     QPointer<QPdfDocument> document;
     quint64 epoch{0};
   };
+
+  template <typename Predicate>
+  void eraseJobsIf(Predicate &&shouldErase) {
+    QList<quint64> drop;
+    for (auto it = m_jobs.cbegin(); it != m_jobs.cend(); ++it) {
+      if (shouldErase(it.value())) {
+        drop.append(it.key());
+      }
+    }
+    for (quint64 id : drop) {
+      m_jobs.remove(id);
+    }
+  }
 
   std::unique_ptr<QPdfPageRenderer> m_renderer;
   QPointer<QPdfDocument> m_document;

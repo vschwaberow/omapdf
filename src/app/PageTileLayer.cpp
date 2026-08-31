@@ -1,13 +1,24 @@
 #include "app/PageTileLayer.h"
 
+#include "app/PageTileGeometry.h"
 #include "app/PageTileHub.h"
-#include "app/PdfDocumentAccess.h"
 
 #include <QPainter>
 #include <QPdfDocumentRenderOptions>
 
 #include <algorithm>
 #include <cmath>
+
+namespace {
+
+using omapdf::kPrefetchRing;
+using omapdf::page_tile::clampDpr;
+using omapdf::page_tile::destRect;
+using omapdf::page_tile::directionalPrefetch;
+using omapdf::page_tile::scaledPageSize;
+using omapdf::page_tile::tilePixelSize;
+
+} // namespace
 
 PageTileLayer::PageTileLayer(QQuickItem *parent) : QQuickPaintedItem(parent) {
   setRenderTarget(QQuickPaintedItem::FramebufferObject);
@@ -18,6 +29,17 @@ PageTileLayer::~PageTileLayer() {
   PageTileHub::instance().cancelFor(this);
   clearPdf();
   ++m_epoch;
+}
+
+void PageTileLayer::upsertTile(const Tile &tile) {
+  for (Tile &existing : m_tiles) {
+    if (existing.key == tile.key && existing.current &&
+        existing.basis == tile.basis) {
+      existing = tile;
+      return;
+    }
+  }
+  m_tiles.append(tile);
 }
 
 void PageTileLayer::acceptTile(quint64 requestId, int page, const QImage &image,
@@ -45,25 +67,7 @@ void PageTileLayer::acceptTile(quint64 requestId, int page, const QImage &image,
     return;
   }
 
-  Tile tile;
-  tile.key = job.key;
-  tile.clip = job.clip;
-  tile.basis = m_sourceSize;
-  tile.image = image;
-  tile.current = true;
-
-  bool replaced = false;
-  for (int i = 0; i < m_tiles.size(); ++i) {
-    if (m_tiles[i].key == job.key && m_tiles[i].current &&
-        m_tiles[i].basis == m_sourceSize) {
-      m_tiles[i] = tile;
-      replaced = true;
-      break;
-    }
-  }
-  if (!replaced) {
-    m_tiles.append(tile);
-  }
+  upsertTile(Tile{job.key, job.clip, m_sourceSize, image, true});
   if (m_status != Ready) {
     setStatus(Ready);
   }
@@ -72,11 +76,11 @@ void PageTileLayer::acceptTile(quint64 requestId, int page, const QImage &image,
 }
 
 void PageTileLayer::setDocument(QObject *document) {
-  if (m_documentObj.data() == document) {
+  if (m_document.source() == document) {
     return;
   }
-  m_documentObj = document;
-  resolveDocument();
+  clearPdf();
+  m_document.bind(document, this, &PageTileLayer::onPdfStatus);
   clearAllTiles();
   rebuildSourceSize();
   requestVisibleTiles();
@@ -103,11 +107,7 @@ void PageTileLayer::setRenderScale(qreal scale) {
 }
 
 void PageTileLayer::setDevicePixelRatio(qreal dpr) {
-  if (dpr < 0.25) {
-    dpr = 0.25;
-  } else if (dpr > 4.0) {
-    dpr = 4.0;
-  }
+  dpr = clampDpr(dpr);
   if (qFuzzyCompare(m_dpr + 1.0, dpr + 1.0)) {
     return;
   }
@@ -169,6 +169,22 @@ void PageTileLayer::geometryChange(const QRectF &newGeometry,
   beginRescale();
 }
 
+void PageTileLayer::paintTilePass(QPainter *painter, bool currentGeneration) {
+  for (const Tile &tile : m_tiles) {
+    if (tile.image.isNull()) {
+      continue;
+    }
+    const bool isCurrent = tile.current && tile.basis == m_sourceSize;
+    if (isCurrent != currentGeneration) {
+      continue;
+    }
+    const QRectF dest = tileDestRect(tile);
+    if (!dest.isEmpty()) {
+      painter->drawImage(dest, tile.image);
+    }
+  }
+}
+
 void PageTileLayer::paint(QPainter *painter) {
   if (width() <= 0 || height() <= 0) {
     return;
@@ -179,35 +195,15 @@ void PageTileLayer::paint(QPainter *painter) {
     painter->drawImage(QRectF(0, 0, width(), height()), m_placeholder);
   }
 
-  for (const Tile &tile : m_tiles) {
-    if (tile.image.isNull()) {
-      continue;
-    }
-    if (tile.current && tile.basis == m_sourceSize) {
-      continue;
-    }
-    const QRectF dest = tileDestRect(tile);
-    if (!dest.isEmpty()) {
-      painter->drawImage(dest, tile.image);
-    }
-  }
-  for (const Tile &tile : m_tiles) {
-    if (tile.image.isNull() || !tile.current || tile.basis != m_sourceSize) {
-      continue;
-    }
-    const QRectF dest = tileDestRect(tile);
-    if (!dest.isEmpty()) {
-      painter->drawImage(dest, tile.image);
-    }
-  }
+  paintTilePass(painter, false);
+  paintTilePass(painter, true);
 }
 
 void PageTileLayer::clearPdf() {
-  m_statusConn.reset();
-  if (!m_pdf.isNull()) {
-    PageTileHub::instance().forgetDocument(m_pdf.data());
+  if (QPdfDocument *pdf = m_document.document()) {
+    PageTileHub::instance().forgetDocument(pdf);
   }
-  m_pdf.clear();
+  m_document.clear();
 }
 
 void PageTileLayer::onPdfStatus(QPdfDocument::Status status) {
@@ -220,53 +216,8 @@ void PageTileLayer::onPdfStatus(QPdfDocument::Status status) {
   clearPdf();
 }
 
-void PageTileLayer::resolveDocument() {
-  clearPdf();
-  if (m_documentObj.isNull()) {
-    return;
-  }
-  m_pdf = pdfDocumentPtr(m_documentObj.data());
-  if (m_pdf.isNull()) {
-    return;
-  }
-  m_statusConn.reset(QObject::connect(m_pdf.data(), &QPdfDocument::statusChanged,
-                                      this, &PageTileLayer::onPdfStatus));
-}
-
-QSize PageTileLayer::scaledPageSize() const {
-  if (width() <= 0 || height() <= 0 || !qIsFinite(m_dpr) || m_dpr <= 0) {
-    return {};
-  }
-  qreal dpr = m_dpr;
-  const qreal edge = width() * dpr;
-  if (!qIsFinite(edge) || edge <= 0) {
-    return {};
-  }
-  if (edge > kMaxEdge) {
-    dpr *= qreal(kMaxEdge) / edge;
-  }
-  const int w = qRound(width() * dpr);
-  const int h = qRound(height() * dpr);
-  if (w < 1 || h < 1) {
-    return {};
-  }
-  return QSize(w, h);
-}
-
-int PageTileLayer::tilePixelSize() const {
-  const QSize scaled = m_sourceSize.isEmpty() ? scaledPageSize() : m_sourceSize;
-  const int edge = qMax(scaled.width(), scaled.height());
-  if (edge <= 1200) {
-    return 256;
-  }
-  if (edge <= 2800) {
-    return 512;
-  }
-  return 1024;
-}
-
 void PageTileLayer::rebuildSourceSize() {
-  const QSize next = scaledPageSize();
+  const QSize next = scaledPageSize(width(), height(), m_dpr);
   if (m_sourceSize == next) {
     return;
   }
@@ -319,20 +270,30 @@ bool PageTileLayer::isInflight(const TileKey &key) const {
   return false;
 }
 
-QRectF PageTileLayer::tileDestRect(const Tile &tile) const {
-  if (tile.basis.isEmpty() || width() <= 0 || height() <= 0) {
-    return {};
+bool PageTileLayer::hasCurrentTile(const TileKey &key, QSize basis) const {
+  for (const Tile &existing : m_tiles) {
+    if (existing.current && existing.basis == basis && existing.key == key &&
+        !existing.image.isNull()) {
+      return true;
+    }
   }
-  const qreal sx = width() / qreal(tile.basis.width());
-  const qreal sy = height() / qreal(tile.basis.height());
-  return QRectF(tile.clip.x() * sx, tile.clip.y() * sy, tile.clip.width() * sx,
-                tile.clip.height() * sy);
+  return false;
+}
+
+QRectF PageTileLayer::tileDestRect(const Tile &tile) const {
+  return destRect(tile.basis, tile.clip, width(), height());
+}
+
+QRectF PageTileLayer::viewportOrFull() const {
+  if (!m_visibleRect.isEmpty()) {
+    return m_visibleRect;
+  }
+  return QRectF(0, 0, width(), height());
 }
 
 void PageTileLayer::requestPlaceholder() {
-  if (m_paused || m_placeholderInflight || m_pdf.isNull() ||
-      m_pdf->status() != QPdfDocument::Status::Ready || m_page < 0 ||
-      m_page >= m_pdf->pageCount()) {
+  if (m_paused || m_placeholderInflight || !m_document.isReady() ||
+      m_page < 0 || m_page >= m_document.document()->pageCount()) {
     return;
   }
   if (!m_placeholder.isNull() && m_placeholderBasis == m_sourceSize) {
@@ -345,8 +306,8 @@ void PageTileLayer::requestPlaceholder() {
   const QSize small(qMax(1, scaled.width() / 4), qMax(1, scaled.height() / 4));
   QPdfDocumentRenderOptions opts;
   opts.setScaledSize(small);
-  const quint64 id = PageTileHub::instance().request(m_pdf.data(), m_page, small,
-                                                     opts, this, m_epoch);
+  const quint64 id = PageTileHub::instance().request(
+      m_document.document(), m_page, small, opts, this, m_epoch);
   if (id == 0) {
     return;
   }
@@ -358,30 +319,18 @@ void PageTileLayer::requestVisibleTiles() {
   if (m_paused) {
     return;
   }
-  if (m_pdf.isNull() || m_pdf->status() != QPdfDocument::Status::Ready ||
-      m_page < 0 || m_page >= m_pdf->pageCount()) {
+  requestPlaceholder();
+  if (!m_document.isReady() || m_page < 0 ||
+      m_page >= m_document.document()->pageCount()) {
     return;
-  }
-  if (m_sourceSize.isEmpty()) {
-    rebuildSourceSize();
   }
   const QSize scaled = m_sourceSize;
-  if (scaled.isEmpty()) {
+  if (scaled.isEmpty() || width() <= 0 || height() <= 0) {
     return;
   }
 
-  requestPlaceholder();
-
-  QRectF vis = m_visibleRect;
-  if (vis.isEmpty()) {
-    vis = QRectF(0, 0, width(), height());
-  }
-  vis = vis.intersected(QRectF(0, 0, width(), height()));
-  if (vis.isEmpty()) {
-    return;
-  }
-
-  const int tile = tilePixelSize();
+  const QRectF vis = viewportOrFull();
+  const int tile = tilePixelSize(scaled);
   const qreal scaleX = qreal(scaled.width()) / width();
   const qreal scaleY = qreal(scaled.height()) / height();
   const qreal left = qMax(0.0, vis.left() * scaleX);
@@ -389,32 +338,13 @@ void PageTileLayer::requestVisibleTiles() {
   const qreal right = qMin(qreal(scaled.width()), vis.right() * scaleX);
   const qreal bottom = qMin(qreal(scaled.height()), vis.bottom() * scaleY);
 
-  int prefX0 = kPrefetchBase;
-  int prefX1 = kPrefetchBase;
-  int prefY0 = kPrefetchBase;
-  int prefY1 = kPrefetchBase;
-  constexpr qreal kDirThreshold = 2.0;
-  if (m_scrollDelta.x() > kDirThreshold) {
-    prefX1 = 2;
-    prefX0 = 0;
-  } else if (m_scrollDelta.x() < -kDirThreshold) {
-    prefX0 = 2;
-    prefX1 = 0;
-  }
-  if (m_scrollDelta.y() > kDirThreshold) {
-    prefY1 = 2;
-    prefY0 = 0;
-  } else if (m_scrollDelta.y() < -kDirThreshold) {
-    prefY0 = 2;
-    prefY1 = 0;
-  }
-
-  const int x0 = qMax(0, int(std::floor(left / tile)) - prefX0);
-  const int y0 = qMax(0, int(std::floor(top / tile)) - prefY0);
+  const auto bias = directionalPrefetch(m_scrollDelta);
+  const int x0 = qMax(0, int(std::floor(left / tile)) - bias.beforeX);
+  const int y0 = qMax(0, int(std::floor(top / tile)) - bias.beforeY);
   const int x1 = qMin((scaled.width() - 1) / tile,
-                      int(std::floor((right - 1) / tile)) + prefX1);
+                      int(std::floor((right - 1) / tile)) + bias.afterX);
   const int y1 = qMin((scaled.height() - 1) / tile,
-                      int(std::floor((bottom - 1) / tile)) + prefY1);
+                      int(std::floor((bottom - 1) / tile)) + bias.afterY);
 
   const qreal cx = (left + right) * 0.5;
   const qreal cy = (top + bottom) * 0.5;
@@ -430,15 +360,7 @@ void PageTileLayer::requestVisibleTiles() {
   for (int ty = y0; ty <= y1; ++ty) {
     for (int tx = x0; tx <= x1; ++tx) {
       const TileKey key{tx, ty};
-      bool have = false;
-      for (const Tile &existing : m_tiles) {
-        if (existing.current && existing.basis == scaled &&
-            existing.key == key && !existing.image.isNull()) {
-          have = true;
-          break;
-        }
-      }
-      if (have || isInflight(key)) {
+      if (hasCurrentTile(key, scaled) || isInflight(key)) {
         continue;
       }
       const int x = tx * tile;
@@ -460,12 +382,13 @@ void PageTileLayer::requestVisibleTiles() {
             });
 
   PageTileHub &hub = PageTileHub::instance();
+  QPdfDocument *pdf = m_document.document();
   for (const Candidate &c : candidates) {
     QPdfDocumentRenderOptions opts;
     opts.setScaledSize(scaled);
     opts.setScaledClipRect(c.clip);
     const quint64 id =
-        hub.request(m_pdf.data(), m_page, c.clip.size(), opts, this, m_epoch);
+        hub.request(pdf, m_page, c.clip.size(), opts, this, m_epoch);
     if (id == 0) {
       continue;
     }
@@ -481,13 +404,10 @@ void PageTileLayer::dropFarTiles() {
   if (scaled.isEmpty() || width() <= 0 || height() <= 0) {
     return;
   }
-  QRectF vis = m_visibleRect;
-  if (vis.isEmpty()) {
-    vis = QRectF(0, 0, width(), height());
-  }
-  const int tile = tilePixelSize();
+  const QRectF vis = viewportOrFull();
+  const int tile = tilePixelSize(scaled);
   const qreal margin =
-      tile * (kPrefetchBase + 2) / (qreal(scaled.width()) / width());
+      tile * (kPrefetchRing + 2) / (qreal(scaled.width()) / width());
   const QRectF keep = vis.adjusted(-margin, -margin, margin, margin)
                           .intersected(QRectF(0, 0, width(), height()));
 
@@ -495,8 +415,7 @@ void PageTileLayer::dropFarTiles() {
   kept.reserve(m_tiles.size());
   bool removed = false;
   for (const Tile &tileImg : m_tiles) {
-    const QRectF dest = tileDestRect(tileImg);
-    if (dest.intersects(keep)) {
+    if (tileDestRect(tileImg).intersects(keep)) {
       kept.append(tileImg);
     } else {
       removed = true;
@@ -512,11 +431,7 @@ void PageTileLayer::dropFarTiles() {
     if (it.value().placeholder) {
       continue;
     }
-    const QRectF dest(
-        it.value().clip.x() * width() / qreal(scaled.width()),
-        it.value().clip.y() * height() / qreal(scaled.height()),
-        it.value().clip.width() * width() / qreal(scaled.width()),
-        it.value().clip.height() * height() / qreal(scaled.height()));
+    const QRectF dest = destRect(scaled, it.value().clip, width(), height());
     if (!dest.intersects(keep)) {
       dropIds.append(it.key());
     }
@@ -527,10 +442,7 @@ void PageTileLayer::dropFarTiles() {
 }
 
 void PageTileLayer::pruneStaleTiles() {
-  QRectF vis = m_visibleRect;
-  if (vis.isEmpty()) {
-    vis = QRectF(0, 0, width(), height());
-  }
+  const QRectF vis = viewportOrFull();
   bool haveCurrentVisible = false;
   for (const Tile &tile : m_tiles) {
     if (!tile.current || tile.basis != m_sourceSize || tile.image.isNull()) {

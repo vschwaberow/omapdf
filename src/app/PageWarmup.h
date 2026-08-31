@@ -1,12 +1,11 @@
 #pragma once
 
-#include "app/ScopedConnection.h"
+#include "app/PdfDocumentBinding.h"
 
 #include <QtQml/qqmlregistration.h>
 
 #include <QObject>
 #include <QPdfDocument>
-#include <QPointer>
 #include <QSize>
 #include <memory>
 
@@ -26,7 +25,7 @@ public:
   explicit PageWarmup(QObject *parent = nullptr);
   ~PageWarmup() override;
 
-  [[nodiscard]] QObject *document() const { return m_documentObj.data(); }
+  [[nodiscard]] QObject *document() const { return m_document.source(); }
   void setDocument(QObject *document);
 
   [[nodiscard]] int currentPage() const { return m_currentPage; }
@@ -45,14 +44,11 @@ signals:
   void pausedChanged();
 
 private:
-  void resolveDocument();
   void warmNeighborhood();
   void clearPdf();
   void onPdfStatus(QPdfDocument::Status status);
 
-  QPointer<QObject> m_documentObj;
-  QPointer<QPdfDocument> m_pdf;
-  ScopedConnection m_statusConn;
+  PdfDocumentBinding m_document;
   std::unique_ptr<QPdfPageRenderer> m_renderer;
   int m_currentPage{-1};
   QSize m_tileSize{720, 960};
