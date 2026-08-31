@@ -28,13 +28,13 @@ PageTileHub::PageTileHub() : QObject(nullptr) {
         if (job.layer.isNull()) {
           return;
         }
-        job.layer->acceptTile(requestId, page, image);
+        job.layer->acceptTile(requestId, page, image, job.epoch);
       });
 }
 
 quint64 PageTileHub::request(QPdfDocument *document, int page, QSize imageSize,
                              const QPdfDocumentRenderOptions &options,
-                             PageTileLayer *layer) {
+                             PageTileLayer *layer, quint64 epoch) {
   if (document == nullptr || layer == nullptr) {
     return 0;
   }
@@ -43,7 +43,7 @@ quint64 PageTileHub::request(QPdfDocument *document, int page, QSize imageSize,
     m_document = document;
   }
   const quint64 id = m_renderer->requestPage(page, imageSize, options);
-  m_jobs.insert(id, Job{layer});
+  m_jobs.insert(id, Job{layer, epoch});
   return id;
 }
 

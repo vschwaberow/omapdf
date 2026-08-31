@@ -20,7 +20,7 @@ public:
   [[nodiscard]] quint64 request(QPdfDocument *document, int page,
                                 QSize imageSize,
                                 const QPdfDocumentRenderOptions &options,
-                                PageTileLayer *layer);
+                                PageTileLayer *layer, quint64 epoch);
   void cancelFor(PageTileLayer *layer);
 
 private:
@@ -28,6 +28,7 @@ private:
 
   struct Job {
     QPointer<PageTileLayer> layer;
+    quint64 epoch{0};
   };
 
   QPdfPageRenderer *m_renderer{nullptr};

@@ -29,6 +29,7 @@ private slots:
   void scrollWindowRendersComplete();
   void idleSharpenUnderBudget();
   void viewportTileClipRendersInk();
+  void viewportTilesUnderBudget();
 };
 
 
@@ -355,6 +356,68 @@ void ReadingGateTest::viewportTileClipRendersInk() {
   QCOMPARE(tile.size(), clip.size());
   qInfo("D1 viewport-tile clip rendered %dx%d with ink", tile.width(),
         tile.height());
+}
+
+
+
+void ReadingGateTest::viewportTilesUnderBudget() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString path = dir.filePath(QStringLiteral("gate_viewport_tiles.pdf"));
+  QVERIFY(writeTextPdf(path, 8, QByteArrayLiteral("omapdf-vtiles")));
+
+  QPdfDocument doc;
+  QCOMPARE(doc.load(path), QPdfDocument::Error::None);
+
+  QPdfPageRenderer renderer;
+  renderer.setDocument(&doc);
+  renderer.setRenderMode(QPdfPageRenderer::RenderMode::MultiThreaded);
+
+  const QSize scaled(1024, 1400);
+  const int tile = 512;
+  const QRect clips[] = {
+      QRect(0, 0, tile, tile),
+      QRect(tile, 0, tile, tile),
+      QRect(0, tile, tile, tile),
+      QRect(tile, tile, tile, tile),
+  };
+
+  std::vector<qint64> samples;
+  QElapsedTimer timer;
+  for (int page = 0; page < 8; ++page) {
+    int remaining = 4;
+    bool imagesOk = true;
+    QEventLoop loop;
+    const auto conn = QObject::connect(
+        &renderer, &QPdfPageRenderer::pageRendered, &loop,
+        [&](int, QSize, const QImage &image, QPdfDocumentRenderOptions, quint64) {
+          if (!imageHasInk(image) || image.size() != QSize(tile, tile)) {
+            imagesOk = false;
+          }
+          if (--remaining == 0) {
+            loop.quit();
+          }
+        });
+    timer.restart();
+    for (const QRect &clip : clips) {
+      QPdfDocumentRenderOptions opts;
+      opts.setScaledSize(scaled);
+      opts.setScaledClipRect(clip);
+      renderer.requestPage(page, clip.size(), opts);
+    }
+    QTimer::singleShot(10000, &loop, &QEventLoop::quit);
+    loop.exec();
+    QObject::disconnect(conn);
+    QVERIFY2(imagesOk, "blank or wrong-size viewport tile");
+    QCOMPARE(remaining, 0);
+    samples.push_back(timer.nsecsElapsed() / 1000);
+  }
+
+  const double p95ms = static_cast<double>(p95Micros(samples)) / 1000.0;
+  qInfo("D1 viewport-tiles (4x512) p95=%.3f ms over %zu pages", p95ms,
+        samples.size());
+  QVERIFY2(p95ms < 1000.0,
+           qPrintable(QStringLiteral("viewport tiles p95 %1 ms").arg(p95ms)));
 }
 
 

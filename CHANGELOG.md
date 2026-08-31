@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Reading gate: visible four-tile viewport render budget
+- Directional tile prefetch; hub epoch cancel; viewport-center request order
+- SceneGraph textures for page tiles; adaptive 256/512/1024 tile size
+- Low-res page placeholder under sharp viewport tiles
+- Soft tile rescale: keep prior tiles until replacements arrive
 - Cap thumbnail raster width at 256 px
 - Reuse the native `QPdfDocument` inside QML `PdfDocument` (no per-layer reload)
 - Share one `QPdfPageRenderer` across page tile layers via `PageTileHub`

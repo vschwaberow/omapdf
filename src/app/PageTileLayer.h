@@ -3,18 +3,20 @@
 #include <QtQml/qqmlregistration.h>
 
 #include <QHash>
-#include <QMetaObject>
 #include <QImage>
+#include <QMetaObject>
 #include <QObject>
 #include <QPair>
-#include <QQuickPaintedItem>
+#include <QQuickItem>
 #include <QRect>
 #include <QRectF>
 #include <QSize>
+#include <QVector>
 
 class QPdfDocument;
+class QSGNode;
 
-class PageTileLayer : public QQuickPaintedItem {
+class PageTileLayer : public QQuickItem {
   Q_OBJECT
   QML_ELEMENT
   Q_PROPERTY(QObject *document READ document WRITE setDocument NOTIFY
@@ -64,9 +66,8 @@ public:
   [[nodiscard]] qreal paintedWidth() const { return width(); }
   [[nodiscard]] qreal paintedHeight() const { return height(); }
 
-  void acceptTile(quint64 requestId, int page, const QImage &image);
-
-  void paint(QPainter *painter) override;
+  void acceptTile(quint64 requestId, int page, const QImage &image,
+                  quint64 epoch);
 
 signals:
   void documentChanged();
@@ -83,28 +84,41 @@ signals:
 protected:
   void geometryChange(const QRectF &newGeometry,
                       const QRectF &oldGeometry) override;
+  QSGNode *updatePaintNode(QSGNode *oldNode,
+                           UpdatePaintNodeData *data) override;
 
 private:
   using TileKey = QPair<int, int>;
 
   struct Tile {
+    TileKey key;
     QRect clip;
+    QSize basis;
     QImage image;
+    bool current{true};
   };
 
   struct Inflight {
     TileKey key;
     QRect clip;
+    bool placeholder{false};
   };
 
   void resolveDocument();
   void rebuildSourceSize();
-  void clearTiles();
+  void invalidateGeneration();
+  void beginRescale();
+  void clearAllTiles();
   void requestVisibleTiles();
+  void requestPlaceholder();
   void dropFarTiles();
+  void pruneStaleTiles();
   void setStatus(int status);
+  void markDirty();
   [[nodiscard]] bool isInflight(const TileKey &key) const;
   [[nodiscard]] QSize scaledPageSize() const;
+  [[nodiscard]] int tilePixelSize() const;
+  [[nodiscard]] QRectF tileDestRect(const Tile &tile) const;
 
   QObject *m_documentObj{nullptr};
   QPdfDocument *m_pdf{nullptr};
@@ -113,13 +127,17 @@ private:
   qreal m_renderScale{1.0};
   qreal m_dpr{1.0};
   QRectF m_visibleRect;
+  QPointF m_scrollDelta;
   bool m_paused{false};
   bool m_pendingRescale{false};
+  bool m_placeholderInflight{false};
   int m_status{Loading};
   QSize m_sourceSize;
-  QHash<TileKey, Tile> m_tiles;
+  quint64 m_epoch{1};
+  QVector<Tile> m_tiles;
+  QImage m_placeholder;
+  QSize m_placeholderBasis;
   QHash<quint64, Inflight> m_inflight;
-  static constexpr int kTile = 512;
-  static constexpr int kPrefetch = 1;
   static constexpr int kMaxEdge = 4096;
+  static constexpr int kPrefetchBase = 1;
 };
