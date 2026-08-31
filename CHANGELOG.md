@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.0] - 2026-08-31
 
-First public release.
+First release.
 
 ### Added
 
@@ -28,3 +28,5 @@ First public release.
 ### Fixed
 
 - Startup failure on Qt 6.11: `TableView` has no `cacheBuffer` property
+
+[0.1.0]: https://github.com/vschwaberow/omapdf/releases/tag/v0.1.0
