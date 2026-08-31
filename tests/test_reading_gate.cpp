@@ -26,6 +26,7 @@ private slots:
   void jumpP95UnderBudget();
   void searchKeystrokeUnderBudget();
   void scrollWindowRendersComplete();
+  void idleSharpenUnderBudget();
 };
 
 
@@ -237,6 +238,80 @@ void ReadingGateTest::scrollWindowRendersComplete() {
         p95ms, windowSamples.size());
   QVERIFY2(p95ms < 1000.0,
            qPrintable(QStringLiteral("scroll window p95 %1 ms").arg(p95ms)));
+}
+
+
+void ReadingGateTest::idleSharpenUnderBudget() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString path = dir.filePath(QStringLiteral("gate_200.pdf"));
+  QVERIFY(writeTextPdf(path, 200, QByteArrayLiteral("omapdf-gate")));
+
+  QPdfDocument doc;
+  QCOMPARE(doc.load(path), QPdfDocument::Error::None);
+
+  QPdfPageRenderer renderer;
+  renderer.setDocument(&doc);
+  renderer.setRenderMode(QPdfPageRenderer::RenderMode::MultiThreaded);
+
+  constexpr int kWindow = 4;
+  constexpr int kStride = 8;
+  const QSize coarse(360, 480);
+  const QSize sharp(720, 960);
+  std::vector<qint64> sharpenSamples;
+  QElapsedTimer timer;
+
+  for (int startPage = 0; startPage + kWindow <= 200; startPage += kStride) {
+    int remaining = kWindow;
+    QEventLoop warm;
+    const auto warmConn = QObject::connect(
+        &renderer, &QPdfPageRenderer::pageRendered, &warm,
+        [&](int, QSize, const QImage &, QPdfDocumentRenderOptions, quint64) {
+          if (--remaining == 0) {
+            warm.quit();
+          }
+        });
+    for (int i = 0; i < kWindow; ++i) {
+      renderer.requestPage(startPage + i, coarse);
+    }
+    QTimer::singleShot(10000, &warm, &QEventLoop::quit);
+    warm.exec();
+    QObject::disconnect(warmConn);
+    QCOMPARE(remaining, 0);
+
+    remaining = kWindow;
+    bool imagesOk = true;
+    QEventLoop loop;
+    const auto conn = QObject::connect(
+        &renderer, &QPdfPageRenderer::pageRendered, &loop,
+        [&](int, QSize size, const QImage &image, QPdfDocumentRenderOptions, quint64) {
+          if (size != sharp) {
+            return;
+          }
+          if (!imageHasInk(image)) {
+            imagesOk = false;
+          }
+          if (--remaining == 0) {
+            loop.quit();
+          }
+        });
+    timer.restart();
+    for (int i = 0; i < kWindow; ++i) {
+      renderer.requestPage(startPage + i, sharp);
+    }
+    QTimer::singleShot(10000, &loop, &QEventLoop::quit);
+    loop.exec();
+    QObject::disconnect(conn);
+    QVERIFY2(imagesOk, "blank sharpen tile");
+    QCOMPARE(remaining, 0);
+    sharpenSamples.push_back(timer.nsecsElapsed() / 1000);
+  }
+
+  const double p95ms = static_cast<double>(p95Micros(sharpenSamples)) / 1000.0;
+  qInfo("A1 idle-sharpen p95=%.3f ms over %zu windows (coarse then sharp)",
+        p95ms, sharpenSamples.size());
+  QVERIFY2(p95ms < 1000.0,
+           qPrintable(QStringLiteral("idle sharpen p95 %1 ms").arg(p95ms)));
 }
 
 QTEST_MAIN(ReadingGateTest)
