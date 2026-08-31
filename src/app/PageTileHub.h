@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QSize>
+#include <memory>
 
 class QImage;
 class QPdfDocument;
@@ -26,13 +27,15 @@ public:
 
 private:
   explicit PageTileHub();
+  ~PageTileHub() override;
 
   struct Job {
     QPointer<PageTileLayer> layer;
+    QPointer<QPdfDocument> document;
     quint64 epoch{0};
   };
 
-  QPdfPageRenderer *m_renderer{nullptr};
+  std::unique_ptr<QPdfPageRenderer> m_renderer;
   QPointer<QPdfDocument> m_document;
   QHash<quint64, Job> m_jobs;
 };

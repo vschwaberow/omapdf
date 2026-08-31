@@ -5,16 +5,14 @@
 #include <QPdfPageRenderer>
 
 PageWarmup::PageWarmup(QObject *parent) : QObject(parent) {
-  m_renderer = new QPdfPageRenderer(this);
+  m_renderer = std::make_unique<QPdfPageRenderer>();
   m_renderer->setRenderMode(QPdfPageRenderer::RenderMode::MultiThreaded);
 }
 
-PageWarmup::~PageWarmup() {
-  clearPdf();
-}
+PageWarmup::~PageWarmup() { clearPdf(); }
 
 void PageWarmup::setDocument(QObject *document) {
-  if (m_documentObj == document) {
+  if (m_documentObj.data() == document) {
     return;
   }
   m_documentObj = document;
@@ -53,10 +51,7 @@ void PageWarmup::setPaused(bool paused) {
 }
 
 void PageWarmup::clearPdf() {
-  if (m_statusConn) {
-    QObject::disconnect(m_statusConn);
-    m_statusConn = {};
-  }
+  m_statusConn.reset();
   m_renderer->setDocument(nullptr);
   m_pdf.clear();
 }
@@ -71,14 +66,16 @@ void PageWarmup::onPdfStatus(QPdfDocument::Status status) {
 
 void PageWarmup::resolveDocument() {
   clearPdf();
-  m_pdf = pdfDocumentFrom(m_documentObj);
+  if (m_documentObj.isNull()) {
+    return;
+  }
+  m_pdf = pdfDocumentPtr(m_documentObj.data());
   m_renderer->setDocument(m_pdf.data());
   if (m_pdf.isNull()) {
     return;
   }
-  m_statusConn = QObject::connect(
-      m_pdf.data(), &QPdfDocument::statusChanged, this,
-      &PageWarmup::onPdfStatus);
+  m_statusConn.reset(QObject::connect(m_pdf.data(), &QPdfDocument::statusChanged,
+                                      this, &PageWarmup::onPdfStatus));
 }
 
 void PageWarmup::warmNeighborhood() {

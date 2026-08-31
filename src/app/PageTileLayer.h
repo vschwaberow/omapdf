@@ -1,10 +1,11 @@
 #pragma once
 
+#include "app/ScopedConnection.h"
+
 #include <QtQml/qqmlregistration.h>
 
 #include <QHash>
 #include <QImage>
-#include <QMetaObject>
 #include <QObject>
 #include <QPair>
 #include <QPdfDocument>
@@ -42,7 +43,7 @@ public:
   explicit PageTileLayer(QQuickItem *parent = nullptr);
   ~PageTileLayer() override;
 
-  [[nodiscard]] QObject *document() const { return m_documentObj; }
+  [[nodiscard]] QObject *document() const { return m_documentObj.data(); }
   void setDocument(QObject *document);
 
   [[nodiscard]] int page() const { return m_page; }
@@ -121,9 +122,9 @@ private:
   [[nodiscard]] int tilePixelSize() const;
   [[nodiscard]] QRectF tileDestRect(const Tile &tile) const;
 
-  QObject *m_documentObj{nullptr};
+  QPointer<QObject> m_documentObj;
   QPointer<QPdfDocument> m_pdf;
-  QMetaObject::Connection m_statusConn;
+  ScopedConnection m_statusConn;
   int m_page{-1};
   qreal m_renderScale{1.0};
   qreal m_dpr{1.0};

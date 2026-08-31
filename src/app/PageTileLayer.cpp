@@ -72,7 +72,7 @@ void PageTileLayer::acceptTile(quint64 requestId, int page, const QImage &image,
 }
 
 void PageTileLayer::setDocument(QObject *document) {
-  if (m_documentObj == document) {
+  if (m_documentObj.data() == document) {
     return;
   }
   m_documentObj = document;
@@ -203,10 +203,7 @@ void PageTileLayer::paint(QPainter *painter) {
 }
 
 void PageTileLayer::clearPdf() {
-  if (m_statusConn) {
-    QObject::disconnect(m_statusConn);
-    m_statusConn = {};
-  }
+  m_statusConn.reset();
   if (!m_pdf.isNull()) {
     PageTileHub::instance().forgetDocument(m_pdf.data());
   }
@@ -225,25 +222,35 @@ void PageTileLayer::onPdfStatus(QPdfDocument::Status status) {
 
 void PageTileLayer::resolveDocument() {
   clearPdf();
-  m_pdf = pdfDocumentFrom(m_documentObj);
+  if (m_documentObj.isNull()) {
+    return;
+  }
+  m_pdf = pdfDocumentPtr(m_documentObj.data());
   if (m_pdf.isNull()) {
     return;
   }
-  m_statusConn = QObject::connect(m_pdf.data(), &QPdfDocument::statusChanged,
-                                  this, &PageTileLayer::onPdfStatus);
+  m_statusConn.reset(QObject::connect(m_pdf.data(), &QPdfDocument::statusChanged,
+                                      this, &PageTileLayer::onPdfStatus));
 }
 
 QSize PageTileLayer::scaledPageSize() const {
-  if (width() <= 0 || height() <= 0) {
+  if (width() <= 0 || height() <= 0 || !qIsFinite(m_dpr) || m_dpr <= 0) {
     return {};
   }
   qreal dpr = m_dpr;
   const qreal edge = width() * dpr;
+  if (!qIsFinite(edge) || edge <= 0) {
+    return {};
+  }
   if (edge > kMaxEdge) {
     dpr *= qreal(kMaxEdge) / edge;
   }
-  return QSize(qMax(1, qRound(width() * dpr)),
-               qMax(1, qRound(height() * dpr)));
+  const int w = qRound(width() * dpr);
+  const int h = qRound(height() * dpr);
+  if (w < 1 || h < 1) {
+    return {};
+  }
+  return QSize(w, h);
 }
 
 int PageTileLayer::tilePixelSize() const {

@@ -1,12 +1,14 @@
 #pragma once
 
+#include "app/ScopedConnection.h"
+
 #include <QtQml/qqmlregistration.h>
 
-#include <QMetaObject>
 #include <QObject>
 #include <QPdfDocument>
 #include <QPointer>
 #include <QSize>
+#include <memory>
 
 class QPdfPageRenderer;
 
@@ -24,7 +26,7 @@ public:
   explicit PageWarmup(QObject *parent = nullptr);
   ~PageWarmup() override;
 
-  [[nodiscard]] QObject *document() const { return m_documentObj; }
+  [[nodiscard]] QObject *document() const { return m_documentObj.data(); }
   void setDocument(QObject *document);
 
   [[nodiscard]] int currentPage() const { return m_currentPage; }
@@ -48,10 +50,10 @@ private:
   void clearPdf();
   void onPdfStatus(QPdfDocument::Status status);
 
-  QObject *m_documentObj{nullptr};
+  QPointer<QObject> m_documentObj;
   QPointer<QPdfDocument> m_pdf;
-  QMetaObject::Connection m_statusConn;
-  QPdfPageRenderer *m_renderer{nullptr};
+  ScopedConnection m_statusConn;
+  std::unique_ptr<QPdfPageRenderer> m_renderer;
   int m_currentPage{-1};
   QSize m_tileSize{720, 960};
   bool m_paused{false};
