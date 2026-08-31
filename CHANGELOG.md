@@ -1,0 +1,30 @@
+# Changelog
+
+All notable changes to this project are documented here.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.1.0] - 2026-08-31
+
+First public release.
+
+### Added
+
+- Qt 6 Quick PDF reader with continuous vertical scroll (`OmapdfMultiPageView`)
+- In-app tabs, as-you-type search, and live Omarchy theme from TOML
+- Reader parity: copy, select all, fit width/page, print, password prompt, external link confirm
+- Resizable left chrome (thumbnails, outline, reader) via SplitView
+- Sidecar highlights and notes under `~/.local/state/omapdf/`
+- Optional power features: libqpdf page ops (rotate, delete, extract, merge) and annot export
+- Per-document session restore (zoom, page, scroll, dim)
+- DE/EN locale support
+- CTest suite including `reading_gate` performance budgets
+- Desktop entry, icon, and `docs/usage.md` keyboard reference
+- Version `0.1.0` from CMake (`--version`, welcome screen, window title)
+
+### Fixed
+
+- Startup failure on Qt 6.11: `TableView` has no `cacheBuffer` property
