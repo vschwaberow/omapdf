@@ -168,6 +168,11 @@ void AnnotStore::setDirty(bool dirty) {
   emit dirtyChanged();
 }
 
+void AnnotStore::invalidatePageCaches() {
+  m_polyByPage.clear();
+  m_noteByPage.clear();
+}
+
 void AnnotStore::pushUndo() {
   m_undo.push_back(m_annots);
   if (m_undo.size() > kMaxUndo) {
@@ -189,6 +194,7 @@ void AnnotStore::undo() {
   m_annots = std::move(m_undo.back());
   m_undo.pop_back();
   endResetModel();
+  invalidatePageCaches();
   setDirty(true);
 }
 
@@ -201,6 +207,7 @@ void AnnotStore::redo() {
   m_annots = std::move(m_redo.back());
   m_redo.pop_back();
   endResetModel();
+  invalidatePageCaches();
   setDirty(true);
 }
 
@@ -212,6 +219,7 @@ void AnnotStore::load(const QString &path, const QString &contentHash) {
   m_undo.clear();
   m_redo.clear();
   endResetModel();
+  invalidatePageCaches();
   emit pathChanged();
   setDirty(false);
 
@@ -238,6 +246,7 @@ void AnnotStore::load(const QString &path, const QString &contentHash) {
   beginResetModel();
   m_annots = std::move(*parsed);
   endResetModel();
+  invalidatePageCaches();
 }
 
 std::expected<std::vector<AnnotStore::Annot>, QString>
@@ -301,6 +310,7 @@ void AnnotStore::appendAnnot(Annot &&annot) {
   beginInsertRows({}, row, row);
   m_annots.push_back(std::move(annot));
   endInsertRows();
+  invalidatePageCaches();
   setDirty(true);
 }
 
@@ -384,6 +394,7 @@ void AnnotStore::removeAt(int row) {
   beginRemoveRows({}, row, row);
   m_annots.erase(m_annots.begin() + row);
   endRemoveRows();
+  invalidatePageCaches();
   setDirty(true);
 }
 
@@ -433,6 +444,9 @@ QVariantList AnnotStore::items() const {
 }
 
 QVariantList AnnotStore::polygonsOnPage(int page) const {
+  if (const auto it = m_polyByPage.constFind(page); it != m_polyByPage.cend()) {
+    return it.value();
+  }
   QVariantList out;
   for (const Annot &a : m_annots) {
     if (a.page != page || a.type != QLatin1String("highlight")) {
@@ -443,10 +457,14 @@ QVariantList AnnotStore::polygonsOnPage(int page) const {
     entry.insert(QStringLiteral("paths"), quadsToVariant(a.quads));
     out.push_back(entry);
   }
+  m_polyByPage.insert(page, out);
   return out;
 }
 
 QVariantList AnnotStore::notesOnPage(int page) const {
+  if (const auto it = m_noteByPage.constFind(page); it != m_noteByPage.cend()) {
+    return it.value();
+  }
   QVariantList out;
   for (const Annot &a : m_annots) {
     if (a.page != page || a.type != QLatin1String("note")) {
@@ -459,5 +477,6 @@ QVariantList AnnotStore::notesOnPage(int page) const {
     entry.insert(QStringLiteral("y"), a.point.y());
     out.push_back(entry);
   }
+  m_noteByPage.insert(page, out);
   return out;
 }

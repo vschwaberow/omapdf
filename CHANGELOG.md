@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Reading gate: visible four-tile viewport render budget
+- Directional tile prefetch; hub epoch cancel; viewport-center request order
+- SceneGraph textures for page tiles; adaptive 256/512/1024 tile size
+- Low-res page placeholder under sharp viewport tiles
+- Soft tile rescale: keep prior tiles until replacements arrive
+- Cap thumbnail raster width at 256 px
+- Reuse the native `QPdfDocument` inside QML `PdfDocument` (no per-layer reload)
+- Share one `QPdfPageRenderer` across page tile layers via `PageTileHub`
+- Debounce tool-rail zoom percent; sharpen after 100 ms idle
+- Pause page-tile requests while flicking; detach link model during move
+- Viewport tile cache: render visible page clips via `PageTileLayer`
+- Faster flick scrolling: lower page raster DPI while moving, sharpen after idle
+- Hide search and annot overlays during scroll; skip search shapes on pages without hits
+- Warm adjacent pages via `PageWarmup` (`QPdfPageRenderer`)
+- Cache annot polygons/notes per page in `AnnotStore`
+- Loading veil on tab open until the PDF is ready; coalesce pinch/scale layouts
+- Reading gate covers idle-sharpen render windows
+- Debounce Ctrl+Wheel zoom; cap page texture edge at 4096 px
+- Skip note markers and current-search stroke while scrolling
+- Warm ±2 pages; debounce warmup tile size on resize
+- Pause page warmup while flicking; hide link hit-targets while moving
+- Selection shape only when text is selected; debounce thumbnail follow
+- Cache page extents for TableView row heights; coarser scroll-time DPR
+- Debounce status-line updates while scrolling; hide selection while moving
+
 ## [0.1.0] - 2026-08-31
 
 First release.

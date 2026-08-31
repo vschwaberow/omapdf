@@ -5,6 +5,7 @@
 #include <QPdfDocument>
 #include <QPdfPageNavigator>
 #include <QPdfPageRenderer>
+#include <QPdfDocumentRenderOptions>
 #include <QPdfSearchModel>
 #include <QImage>
 #include <QSize>
@@ -26,6 +27,9 @@ private slots:
   void jumpP95UnderBudget();
   void searchKeystrokeUnderBudget();
   void scrollWindowRendersComplete();
+  void idleSharpenUnderBudget();
+  void viewportTileClipRendersInk();
+  void viewportTilesUnderBudget();
 };
 
 
@@ -238,6 +242,184 @@ void ReadingGateTest::scrollWindowRendersComplete() {
   QVERIFY2(p95ms < 1000.0,
            qPrintable(QStringLiteral("scroll window p95 %1 ms").arg(p95ms)));
 }
+
+
+void ReadingGateTest::idleSharpenUnderBudget() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString path = dir.filePath(QStringLiteral("gate_200.pdf"));
+  QVERIFY(writeTextPdf(path, 200, QByteArrayLiteral("omapdf-gate")));
+
+  QPdfDocument doc;
+  QCOMPARE(doc.load(path), QPdfDocument::Error::None);
+
+  QPdfPageRenderer renderer;
+  renderer.setDocument(&doc);
+  renderer.setRenderMode(QPdfPageRenderer::RenderMode::MultiThreaded);
+
+  constexpr int kWindow = 4;
+  constexpr int kStride = 8;
+  const QSize coarse(360, 480);
+  const QSize sharp(720, 960);
+  std::vector<qint64> sharpenSamples;
+  QElapsedTimer timer;
+
+  for (int startPage = 0; startPage + kWindow <= 200; startPage += kStride) {
+    int remaining = kWindow;
+    QEventLoop warm;
+    const auto warmConn = QObject::connect(
+        &renderer, &QPdfPageRenderer::pageRendered, &warm,
+        [&](int, QSize, const QImage &, QPdfDocumentRenderOptions, quint64) {
+          if (--remaining == 0) {
+            warm.quit();
+          }
+        });
+    for (int i = 0; i < kWindow; ++i) {
+      renderer.requestPage(startPage + i, coarse);
+    }
+    QTimer::singleShot(10000, &warm, &QEventLoop::quit);
+    warm.exec();
+    QObject::disconnect(warmConn);
+    QCOMPARE(remaining, 0);
+
+    remaining = kWindow;
+    bool imagesOk = true;
+    QEventLoop loop;
+    const auto conn = QObject::connect(
+        &renderer, &QPdfPageRenderer::pageRendered, &loop,
+        [&](int, QSize size, const QImage &image, QPdfDocumentRenderOptions, quint64) {
+          if (size != sharp) {
+            return;
+          }
+          if (!imageHasInk(image)) {
+            imagesOk = false;
+          }
+          if (--remaining == 0) {
+            loop.quit();
+          }
+        });
+    timer.restart();
+    for (int i = 0; i < kWindow; ++i) {
+      renderer.requestPage(startPage + i, sharp);
+    }
+    QTimer::singleShot(10000, &loop, &QEventLoop::quit);
+    loop.exec();
+    QObject::disconnect(conn);
+    QVERIFY2(imagesOk, "blank sharpen tile");
+    QCOMPARE(remaining, 0);
+    sharpenSamples.push_back(timer.nsecsElapsed() / 1000);
+  }
+
+  const double p95ms = static_cast<double>(p95Micros(sharpenSamples)) / 1000.0;
+  qInfo("A1 idle-sharpen p95=%.3f ms over %zu windows (coarse then sharp)",
+        p95ms, sharpenSamples.size());
+  QVERIFY2(p95ms < 1000.0,
+           qPrintable(QStringLiteral("idle sharpen p95 %1 ms").arg(p95ms)));
+}
+
+
+void ReadingGateTest::viewportTileClipRendersInk() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString path = dir.filePath(QStringLiteral("gate_tiles.pdf"));
+  QVERIFY(writeTextPdf(path, 4, QByteArrayLiteral("omapdf-tile")));
+
+  QPdfDocument doc;
+  QCOMPARE(doc.load(path), QPdfDocument::Error::None);
+
+  QPdfPageRenderer renderer;
+  renderer.setDocument(&doc);
+  renderer.setRenderMode(QPdfPageRenderer::RenderMode::MultiThreaded);
+
+  const QSize scaled(1024, 1400);
+  const QRect clip(0, 0, 512, 512);
+  QPdfDocumentRenderOptions opts;
+  opts.setScaledSize(scaled);
+  opts.setScaledClipRect(clip);
+
+  bool ok = false;
+  QImage tile;
+  QEventLoop loop;
+  const auto conn = QObject::connect(
+      &renderer, &QPdfPageRenderer::pageRendered, &loop,
+      [&](int, QSize, const QImage &image, QPdfDocumentRenderOptions, quint64) {
+        tile = image;
+        ok = imageHasInk(image);
+        loop.quit();
+      });
+  renderer.requestPage(0, clip.size(), opts);
+  QTimer::singleShot(10000, &loop, &QEventLoop::quit);
+  loop.exec();
+  QObject::disconnect(conn);
+
+  QVERIFY2(ok, "blank clipped tile");
+  QCOMPARE(tile.size(), clip.size());
+  qInfo("D1 viewport-tile clip rendered %dx%d with ink", tile.width(),
+        tile.height());
+}
+
+
+
+void ReadingGateTest::viewportTilesUnderBudget() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString path = dir.filePath(QStringLiteral("gate_viewport_tiles.pdf"));
+  QVERIFY(writeTextPdf(path, 8, QByteArrayLiteral("omapdf-vtiles")));
+
+  QPdfDocument doc;
+  QCOMPARE(doc.load(path), QPdfDocument::Error::None);
+
+  QPdfPageRenderer renderer;
+  renderer.setDocument(&doc);
+  renderer.setRenderMode(QPdfPageRenderer::RenderMode::MultiThreaded);
+
+  const QSize scaled(1024, 1400);
+  const int tile = 512;
+  const QRect clips[] = {
+      QRect(0, 0, tile, tile),
+      QRect(tile, 0, tile, tile),
+      QRect(0, tile, tile, tile),
+      QRect(tile, tile, tile, tile),
+  };
+
+  std::vector<qint64> samples;
+  QElapsedTimer timer;
+  for (int page = 0; page < 8; ++page) {
+    int remaining = 4;
+    bool imagesOk = true;
+    QEventLoop loop;
+    const auto conn = QObject::connect(
+        &renderer, &QPdfPageRenderer::pageRendered, &loop,
+        [&](int, QSize, const QImage &image, QPdfDocumentRenderOptions, quint64) {
+          if (!imageHasInk(image) || image.size() != QSize(tile, tile)) {
+            imagesOk = false;
+          }
+          if (--remaining == 0) {
+            loop.quit();
+          }
+        });
+    timer.restart();
+    for (const QRect &clip : clips) {
+      QPdfDocumentRenderOptions opts;
+      opts.setScaledSize(scaled);
+      opts.setScaledClipRect(clip);
+      renderer.requestPage(page, clip.size(), opts);
+    }
+    QTimer::singleShot(10000, &loop, &QEventLoop::quit);
+    loop.exec();
+    QObject::disconnect(conn);
+    QVERIFY2(imagesOk, "blank or wrong-size viewport tile");
+    QCOMPARE(remaining, 0);
+    samples.push_back(timer.nsecsElapsed() / 1000);
+  }
+
+  const double p95ms = static_cast<double>(p95Micros(samples)) / 1000.0;
+  qInfo("D1 viewport-tiles (4x512) p95=%.3f ms over %zu pages", p95ms,
+        samples.size());
+  QVERIFY2(p95ms < 1000.0,
+           qPrintable(QStringLiteral("viewport tiles p95 %1 ms").arg(p95ms)));
+}
+
 
 QTEST_MAIN(ReadingGateTest)
 #include "test_reading_gate.moc"

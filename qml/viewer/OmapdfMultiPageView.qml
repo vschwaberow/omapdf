@@ -49,8 +49,10 @@ Item {
     property string selectedText
     property var annotStore: null
     property int selectionPage: -1
+    property var searchHitPages: ({})
     property var selectionGeometry: []
     property int lastTapPage: -1
+    readonly property bool viewMoving: tableView.moving
     property real lastTapX: 0
     property real lastTapY: 0
 
@@ -323,6 +325,17 @@ Item {
     */
     property alias searchString: searchModel.searchString
 
+    function rebuildSearchHitPages() {
+        const pages = {}
+        const n = searchModel.count
+        for (let i = 0; i < n; ++i) {
+            const page = searchModel.data(searchModel.index(i, 0), 0x0100)
+            if (page !== undefined && page !== null)
+                pages[page] = true
+        }
+        root.searchHitPages = pages
+    }
+
     /*!
         \qmlmethod void PdfMultiPageView::searchBack()
 
@@ -358,22 +371,60 @@ Item {
         anchors.leftMargin: 2
         reuseItems: true
         model: root.document ? root.document.pageCount : 0
+        onModelChanged: rebuildPageExtentCache()
         rowSpacing: 6
+        property bool sharpRender: true
         property real rotationNorm: Math.round((360 + (root.pageRotation % 360)) % 360)
         property bool rot90: rotationNorm == 90 || rotationNorm == 270
-        onRot90Changed: forceLayout()
         onHeightChanged: layoutDebounce.restart()
         onWidthChanged: layoutDebounce.restart()
+        onMovingChanged: {
+            if (moving) {
+                idleSharpen.stop()
+                sharpRender = false
+            } else {
+                idleSharpen.restart()
+            }
+        }
 
         Timer {
             id: layoutDebounce
             interval: 16
             onTriggered: tableView.forceLayout()
         }
+        Timer {
+            id: idleSharpen
+            interval: 100
+            onTriggered: tableView.sharpRender = true
+        }
         property size firstPagePointSize: root.document?.status === PdfDocument.Ready ? root.document.pagePointSize(0) : Qt.size(1, 1)
         property real pageHolderWidth: Math.max(root.width, ((rot90 ? root.document?.maxPageHeight : root.document?.maxPageWidth) ?? 0) * root.renderScale)
+        property var pageExtentCache: []
+        function rebuildPageExtentCache() {
+            const doc = root.document
+            if (!doc || doc.status !== PdfDocument.Ready) {
+                pageExtentCache = []
+                return
+            }
+            const n = doc.pageCount
+            const extents = new Array(n)
+            for (let i = 0; i < n; ++i) {
+                const sz = doc.pagePointSize(i)
+                extents[i] = rot90 ? sz.width : sz.height
+            }
+            pageExtentCache = extents
+        }
+        onRot90Changed: {
+            rebuildPageExtentCache()
+            forceLayout()
+        }
         columnWidthProvider: function(col) { return root.document ? pageHolderWidth + vscroll.width + 2 : 0 }
-        rowHeightProvider: function(row) { return (rot90 ? root.document.pagePointSize(row).width : root.document.pagePointSize(row).height) * root.renderScale }
+        rowHeightProvider: function(row) {
+            const ext = pageExtentCache[row]
+            if (ext === undefined)
+                return (rot90 ? root.document.pagePointSize(row).width : root.document.pagePointSize(row).height) * root.renderScale
+            return ext * root.renderScale
+        }
 
         // delayed-jump feature in case the user called goToPage() or goToLocation() too early
         property int pendingRow: -1
@@ -412,21 +463,30 @@ Item {
                 HoverHandler {
                     cursorShape: Qt.IBeamCursor
                 }
-                PdfPageImage {
+                PageTileLayer {
                     id: image
                     document: root.document
-                    currentFrame: pageHolder.index
-                    asynchronous: true
-                    fillMode: Image.PreserveAspectFit
+                    page: pageHolder.index
+                    renderScale: root.renderScale
+                    paused: tableView.moving
                     width: paper.pagePointSize.width * root.renderScale
                     height: paper.pagePointSize.height * root.renderScale
-                    property real renderScale: root.renderScale
-                    property real oldRenderScale: 1
+                    devicePixelRatio: tableView.sharpRender
+                                      ? Screen.devicePixelRatio
+                                      : Math.min(1.0, Screen.devicePixelRatio * 0.75)
+                    visibleRect: {
+                        void tableView.contentX
+                        void tableView.contentY
+                        void tableView.width
+                        void tableView.height
+                        const tl = mapFromItem(tableView, 0, 0)
+                        const br = mapFromItem(tableView, tableView.width, tableView.height)
+                        return Qt.rect(tl.x, tl.y, br.x - tl.x, br.y - tl.y)
+                    }
                     onRenderScaleChanged: {
-                        image.sourceSize.width = paper.pagePointSize.width * renderScale * Screen.devicePixelRatio
-                        image.sourceSize.height = 0
                         paper.scale = 1
-                        searchHighlights.update()
+                        if (!pinch.active && !tableView.moving)
+                            searchHighlights.update()
                     }
                     onStatusChanged: {
                         if (pageHolder.index === pageNavigator.currentPage)
@@ -435,7 +495,24 @@ Item {
                 }
                 Shape {
                     anchors.fill: parent
-                    visible: image.status === Image.Ready && searchModel.searchString.length > 0
+                    visible: image.status === Image.Ready
+                             && !tableView.moving
+                             && root.selectedText.length > 0
+                    ShapePath {
+                        strokeWidth: -1
+                        fillColor: style.selectionColor
+                        scale: Qt.size(paper.pageScale, paper.pageScale)
+                        PathMultiline {
+                            paths: selection.geometry
+                        }
+                    }
+                }
+                Shape {
+                    anchors.fill: parent
+                    visible: image.status === Image.Ready
+                             && searchModel.searchString.length > 0
+                             && !tableView.moving
+                             && root.searchHitPages[pageHolder.index] === true
                     onVisibleChanged: searchHighlights.update()
                     ShapePath {
                         strokeWidth: -1
@@ -445,7 +522,8 @@ Item {
                             id: searchHighlights
                             function update() {
                                 // paths could be a binding, but we need to be able to "kick" it sometimes
-                                if (!searchModel.searchString.length) {
+                                if (!searchModel.searchString.length || tableView.moving
+                                        || root.searchHitPages[pageHolder.index] !== true) {
                                     paths = []
                                     return
                                 }
@@ -459,19 +537,11 @@ Item {
                         // (usually because the search string has changed)
                         function onCurrentPageBoundingPolygonsChanged() { searchHighlights.update() }
                     }
-                    ShapePath {
-                        strokeWidth: -1
-                        fillColor: style.selectionColor
-                        scale: Qt.size(paper.pageScale, paper.pageScale)
-                        PathMultiline {
-                            paths: selection.geometry
-                        }
-                    }
                 }
                 Item {
                     id: annotLayer
                     anchors.fill: parent
-                    visible: image.status === Image.Ready && root.annotStore !== null
+                    visible: image.status === Image.Ready && root.annotStore !== null && !tableView.moving
                     property int kick: 0
                     property var entries: {
                         kick
@@ -502,7 +572,7 @@ Item {
                 }
                 Repeater {
                     model: {
-                        if (!root.annotStore)
+                        if (tableView.moving || !root.annotStore)
                             return []
                         annotLayer.kick
                         return root.annotStore.notesOnPage(pageHolder.index)
@@ -523,7 +593,9 @@ Item {
                 }
                 Shape {
                     anchors.fill: parent
-                    visible: image.status === Image.Ready && searchModel.currentPage === pageHolder.index
+                    visible: image.status === Image.Ready
+                             && !tableView.moving
+                             && searchModel.currentPage === pageHolder.index
                     ShapePath {
                         strokeWidth: style.currentSearchResultStrokeWidth
                         strokeColor: style.currentSearchResultStrokeColor
@@ -564,7 +636,6 @@ Item {
                                 paper.x = 0
                                 paper.y = 0
                                 root.renderScale *= ratio
-                                tableView.forceLayout()
                                 if (tableView.rotationNorm == 0) {
                                     tableView.contentX = pageHolder.x + tableView.originX + centroidOnPage.x - centroidInFlickable.x
                                     tableView.contentY = pageHolder.y + tableView.originY + centroidOnPage.y - centroidInFlickable.y
@@ -624,12 +695,13 @@ Item {
                         selection.forceActiveFocus()
                     }
                 }
+                PdfLinkModel {
+                    id: linkModel
+                    document: root.document
+                    page: image.currentFrame
+                }
                 Repeater {
-                    model: PdfLinkModel {
-                        id: linkModel
-                        document: root.document
-                        page: image.currentFrame
-                    }
+                    model: tableView.moving ? null : linkModel
                     delegate: PdfLinkDelegate {
                         x: rectangle.x * paper.pageScale
                         y: rectangle.y * paper.pageScale
@@ -698,7 +770,7 @@ Item {
         if (pageNavigator.jumping)
             return
         // page size changed: TableView needs to redo layout to avoid overlapping delegates or gaps between them
-        tableView.forceLayout()
+        layoutDebounce.restart()
         const cell = tableView.cellAtPos(root.width / 2, root.height / 2)
         const currentItem = tableView.itemAtCell(cell)
         if (currentItem) {
@@ -764,10 +836,21 @@ Item {
             tableView.contentY = 0
         }
     }
+
+    Connections {
+        target: root.document
+        function onStatusChanged() {
+            if (root.document && root.document.status === PdfDocument.Ready)
+                tableView.rebuildPageExtentCache()
+        }
+    }
+
     PdfSearchModel {
         id: searchModel
         document: root.document === undefined ? null : root.document
         onCurrentResultChanged: pageNavigator.jump(currentResultLink)
+        onCountChanged: root.rebuildSearchHitPages()
+        onSearchStringChanged: root.rebuildSearchHitPages()
     }
 
     Menu {

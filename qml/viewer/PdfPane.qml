@@ -39,12 +39,42 @@ Item {
     signal requestExtract()
     signal requestMerge()
 
-    readonly property string statusLine: {
-        if (doc.status !== PdfDocument.Ready)
-            return path
+    property string statusLine: ""
+
+    function refreshStatusLine() {
+        if (doc.status !== PdfDocument.Ready) {
+            statusLine = path
+            return
+        }
         const dirtyMark = annotStore.dirty ? " *" : ""
-        return (docTitle() + dirtyMark + " · " + (view.currentPage + 1) + "/" + doc.pageCount
+        statusLine = (docTitle() + dirtyMark + " · " + (view.currentPage + 1) + "/" + doc.pageCount
                 + " · " + Math.round(view.renderScale * 100) + "%")
+    }
+
+    Timer {
+        id: statusDebounce
+        interval: 60
+        onTriggered: root.refreshStatusLine()
+    }
+
+    Connections {
+        target: view
+        function onCurrentPageChanged() {
+            if (view.viewMoving)
+                statusDebounce.restart()
+            else
+                root.refreshStatusLine()
+        }
+        function onRenderScaleChanged() { statusDebounce.restart() }
+        function onViewMovingChanged() {
+            if (!view.viewMoving)
+                root.refreshStatusLine()
+        }
+    }
+
+    Connections {
+        target: annotStore
+        function onDirtyChanged() { root.refreshStatusLine() }
     }
 
     AnnotStore {
@@ -79,9 +109,21 @@ Item {
     function searchText() { return view.searchString }
     function searchForward() { view.searchForward() }
     function searchBack() { view.searchBack() }
+    property real pendingZoomFactor: 1
+
     function zoomBy(factor) {
         fitMode = ""
-        view.renderScale = Math.max(0.25, Math.min(4, view.renderScale * factor))
+        pendingZoomFactor *= factor
+        zoomDebounce.restart()
+    }
+
+    Timer {
+        id: zoomDebounce
+        interval: 40
+        onTriggered: {
+            view.renderScale = Math.max(0.25, Math.min(4, view.renderScale * root.pendingZoomFactor))
+            root.pendingZoomFactor = 1
+        }
     }
     function fitWidth() {
         fitMode = "width"
@@ -393,6 +435,25 @@ Item {
         annotStore: annotStore
     }
 
+    PageWarmup {
+        id: pageWarmup
+        document: doc
+        currentPage: view.currentPage
+        paused: view.viewMoving
+    }
+
+    Timer {
+        id: warmupTileDebounce
+        interval: 100
+        running: true
+        onTriggered: {
+            pageWarmup.tileSize = Qt.size(
+                Math.max(320, Math.round(root.width)),
+                Math.max(480, Math.round(root.height)))
+        }
+    }
+
+
     WheelHandler {
         acceptedModifiers: Qt.ControlModifier
         onWheel: (event) => {
@@ -414,8 +475,14 @@ Item {
         }
     }
 
-    onWidthChanged: Qt.callLater(applyFitMode)
-    onHeightChanged: Qt.callLater(applyFitMode)
+    onWidthChanged: {
+        warmupTileDebounce.restart()
+        Qt.callLater(applyFitMode)
+    }
+    onHeightChanged: {
+        warmupTileDebounce.restart()
+        Qt.callLater(applyFitMode)
+    }
 
     Connections {
         target: view
@@ -429,6 +496,16 @@ Item {
         target: view.searchModel
         function onCountChanged() { root.searchStatsChanged() }
         function onCurrentResultChanged() { root.searchStatsChanged() }
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        color: theme.background
+        opacity: doc.status === PdfDocument.Ready ? 0 : 0.92
+        visible: opacity > 0
+        z: 15
+        enabled: false
+        Behavior on opacity { NumberAnimation { duration: 100 } }
     }
 
     Rectangle {
@@ -525,6 +602,7 @@ Item {
 
     Component.onCompleted: {
         annotStore.activeColor = app.annotColor()
+        root.refreshStatusLine()
         if (enabled)
             openDocument()
     }
