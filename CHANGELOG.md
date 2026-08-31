@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Viewport tile cache: render visible page clips via `PageTileLayer`
 - Faster flick scrolling: lower page raster DPI while moving, sharpen after idle
 - Hide search and annot overlays during scroll; skip search shapes on pages without hits
 - Warm adjacent pages via `PageWarmup` (`QPdfPageRenderer`)

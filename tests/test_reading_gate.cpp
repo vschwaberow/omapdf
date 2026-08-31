@@ -5,6 +5,7 @@
 #include <QPdfDocument>
 #include <QPdfPageNavigator>
 #include <QPdfPageRenderer>
+#include <QPdfDocumentRenderOptions>
 #include <QPdfSearchModel>
 #include <QImage>
 #include <QSize>
@@ -27,6 +28,7 @@ private slots:
   void searchKeystrokeUnderBudget();
   void scrollWindowRendersComplete();
   void idleSharpenUnderBudget();
+  void viewportTileClipRendersInk();
 };
 
 
@@ -313,6 +315,48 @@ void ReadingGateTest::idleSharpenUnderBudget() {
   QVERIFY2(p95ms < 1000.0,
            qPrintable(QStringLiteral("idle sharpen p95 %1 ms").arg(p95ms)));
 }
+
+
+void ReadingGateTest::viewportTileClipRendersInk() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString path = dir.filePath(QStringLiteral("gate_tiles.pdf"));
+  QVERIFY(writeTextPdf(path, 4, QByteArrayLiteral("omapdf-tile")));
+
+  QPdfDocument doc;
+  QCOMPARE(doc.load(path), QPdfDocument::Error::None);
+
+  QPdfPageRenderer renderer;
+  renderer.setDocument(&doc);
+  renderer.setRenderMode(QPdfPageRenderer::RenderMode::MultiThreaded);
+
+  const QSize scaled(1024, 1400);
+  const QRect clip(0, 0, 512, 512);
+  QPdfDocumentRenderOptions opts;
+  opts.setScaledSize(scaled);
+  opts.setScaledClipRect(clip);
+
+  bool ok = false;
+  QImage tile;
+  QEventLoop loop;
+  const auto conn = QObject::connect(
+      &renderer, &QPdfPageRenderer::pageRendered, &loop,
+      [&](int, QSize, const QImage &image, QPdfDocumentRenderOptions, quint64) {
+        tile = image;
+        ok = imageHasInk(image);
+        loop.quit();
+      });
+  renderer.requestPage(0, clip.size(), opts);
+  QTimer::singleShot(10000, &loop, &QEventLoop::quit);
+  loop.exec();
+  QObject::disconnect(conn);
+
+  QVERIFY2(ok, "blank clipped tile");
+  QCOMPARE(tile.size(), clip.size());
+  qInfo("D1 viewport-tile clip rendered %dx%d with ink", tile.width(),
+        tile.height());
+}
+
 
 QTEST_MAIN(ReadingGateTest)
 #include "test_reading_gate.moc"

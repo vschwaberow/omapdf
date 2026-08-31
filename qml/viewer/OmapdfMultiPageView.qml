@@ -463,36 +463,29 @@ Item {
                 HoverHandler {
                     cursorShape: Qt.IBeamCursor
                 }
-                PdfPageImage {
+                PageTileLayer {
                     id: image
                     document: root.document
-                    currentFrame: pageHolder.index
-                    asynchronous: true
-                    fillMode: Image.PreserveAspectFit
+                    page: pageHolder.index
+                    renderScale: root.renderScale
                     width: paper.pagePointSize.width * root.renderScale
                     height: paper.pagePointSize.height * root.renderScale
-                    property real renderScale: root.renderScale
-                    property real oldRenderScale: 1
-                    function applySourceSize() {
-                        const dpr = tableView.sharpRender
-                                    ? Screen.devicePixelRatio
-                                    : Math.min(1.0, Screen.devicePixelRatio * 0.75)
-                        let w = paper.pagePointSize.width * renderScale * dpr
-                        const maxEdge = 4096
-                        if (w > maxEdge)
-                            w = maxEdge
-                        image.sourceSize.width = w
-                        image.sourceSize.height = 0
+                    devicePixelRatio: tableView.sharpRender
+                                      ? Screen.devicePixelRatio
+                                      : Math.min(1.0, Screen.devicePixelRatio * 0.75)
+                    visibleRect: {
+                        void tableView.contentX
+                        void tableView.contentY
+                        void tableView.width
+                        void tableView.height
+                        const tl = mapFromItem(tableView, 0, 0)
+                        const br = mapFromItem(tableView, tableView.width, tableView.height)
+                        return Qt.rect(tl.x, tl.y, br.x - tl.x, br.y - tl.y)
                     }
                     onRenderScaleChanged: {
-                        applySourceSize()
                         paper.scale = 1
                         if (!pinch.active && !tableView.moving)
                             searchHighlights.update()
-                    }
-                    Connections {
-                        target: tableView
-                        function onSharpRenderChanged() { image.applySourceSize() }
                     }
                     onStatusChanged: {
                         if (pageHolder.index === pageNavigator.currentPage)
