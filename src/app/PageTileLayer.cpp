@@ -16,6 +16,7 @@ using omapdf::page_tile::clampDpr;
 using omapdf::page_tile::destRect;
 using omapdf::page_tile::directionalPrefetch;
 using omapdf::page_tile::scaledPageSize;
+using omapdf::page_tile::preferFullPage;
 using omapdf::page_tile::tilePixelSize;
 
 } // namespace
@@ -303,7 +304,7 @@ void PageTileLayer::requestPlaceholder() {
   if (scaled.isEmpty()) {
     return;
   }
-  const QSize small(qMax(1, scaled.width() / 4), qMax(1, scaled.height() / 4));
+  const QSize small(qMax(1, scaled.width() / 2), qMax(1, scaled.height() / 2));
   QPdfDocumentRenderOptions opts;
   opts.setScaledSize(small);
   const quint64 id = PageTileHub::instance().request(
@@ -319,7 +320,6 @@ void PageTileLayer::requestVisibleTiles() {
   if (m_paused) {
     return;
   }
-  requestPlaceholder();
   if (!m_document.isReady() || m_page < 0 ||
       m_page >= m_document.document()->pageCount()) {
     return;
@@ -329,6 +329,24 @@ void PageTileLayer::requestVisibleTiles() {
     return;
   }
 
+  PageTileHub &hub = PageTileHub::instance();
+  QPdfDocument *pdf = m_document.document();
+  if (preferFullPage(scaled)) {
+    const TileKey key{0, 0};
+    const QRect clip(QPoint(0, 0), scaled);
+    if (!hasCurrentTile(key, scaled) && !isInflight(key)) {
+      QPdfDocumentRenderOptions opts;
+      opts.setScaledSize(scaled);
+      const quint64 id =
+          hub.request(pdf, m_page, scaled, opts, this, m_epoch);
+      if (id != 0) {
+        m_inflight.insert(id, Inflight{key, clip, false});
+      }
+    }
+    return;
+  }
+
+  requestPlaceholder();
   const QRectF vis = viewportOrFull();
   const int tile = tilePixelSize(scaled);
   const qreal scaleX = qreal(scaled.width()) / width();
@@ -381,8 +399,6 @@ void PageTileLayer::requestVisibleTiles() {
               return a.dist2 < b.dist2;
             });
 
-  PageTileHub &hub = PageTileHub::instance();
-  QPdfDocument *pdf = m_document.document();
   for (const Candidate &c : candidates) {
     QPdfDocumentRenderOptions opts;
     opts.setScaledSize(scaled);

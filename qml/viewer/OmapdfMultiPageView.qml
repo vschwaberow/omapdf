@@ -468,12 +468,9 @@ Item {
                     document: root.document
                     page: pageHolder.index
                     renderScale: root.renderScale
-                    paused: tableView.moving
                     width: paper.pagePointSize.width * root.renderScale
                     height: paper.pagePointSize.height * root.renderScale
-                    devicePixelRatio: tableView.sharpRender
-                                      ? Screen.devicePixelRatio
-                                      : Math.min(1.0, Screen.devicePixelRatio * 0.75)
+                    devicePixelRatio: Screen.devicePixelRatio
                     visibleRect: {
                         void tableView.contentX
                         void tableView.contentY

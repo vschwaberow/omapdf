@@ -43,6 +43,19 @@ inline constexpr qreal kScrollDirThreshold = 2.0;
   return QSize(w, h);
 }
 
+[[nodiscard]] inline bool preferFullPage(QSize scaled) {
+  if (scaled.isEmpty()) {
+    return false;
+  }
+  if (scaled.width() > kMaxRequestEdgePx ||
+      scaled.height() > kMaxRequestEdgePx) {
+    return false;
+  }
+  const qint64 pixels =
+      qint64(scaled.width()) * qint64(scaled.height());
+  return pixels <= qint64(kMaxRenderEdgePx) * qint64(kMaxRenderEdgePx);
+}
+
 [[nodiscard]] inline int tilePixelSize(QSize scaled) {
   const int edge = qMax(scaled.width(), scaled.height());
   if (edge <= 1200) {

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reading pages render as one full raster again (tiles only past the size budget)
+- Keep requesting page rasters while scrolling; always use full device pixel ratio
+- Sharper interim placeholder (half resolution)
+
+### Fixed
+
 - RAII connections and QPointer guards around PDF tile/warmup bindings
 - Shutdown no longer segfaults when `QPdfDocument` closes under `PageWarmup`/`PageTileLayer`
 - Restore `QQuickPaintedItem` page tiles (drop SceneGraph recreate-every-frame path)
