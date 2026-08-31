@@ -7,6 +7,7 @@
 #include <QString>
 #include <QUuid>
 #include <QVariantList>
+#include <QHash>
 #include <expected>
 #include <vector>
 
@@ -92,11 +93,14 @@ private:
   [[nodiscard]] QByteArray toJson() const;
   [[nodiscard]] static QList<QPolygonF> quadsFromVariant(const QVariantList &v);
   [[nodiscard]] static QVariantList quadsToVariant(const QList<QPolygonF> &q);
+  void invalidatePageCaches();
 
   QString m_path;
   QByteArray m_contentHash;
   QString m_activeColor{QStringLiteral("#f6c177")};
   std::vector<Annot> m_annots;
+  mutable QHash<int, QVariantList> m_polyByPage;
+  mutable QHash<int, QVariantList> m_noteByPage;
   std::vector<std::vector<Annot>> m_undo;
   std::vector<std::vector<Annot>> m_redo;
   bool m_dirty{false};

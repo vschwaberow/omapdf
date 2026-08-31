@@ -49,6 +49,7 @@ Item {
     property string selectedText
     property var annotStore: null
     property int selectionPage: -1
+    property var searchHitPages: ({})
     property var selectionGeometry: []
     property int lastTapPage: -1
     property real lastTapX: 0
@@ -323,6 +324,17 @@ Item {
     */
     property alias searchString: searchModel.searchString
 
+    function rebuildSearchHitPages() {
+        const pages = {}
+        const n = searchModel.count
+        for (let i = 0; i < n; ++i) {
+            const page = searchModel.data(searchModel.index(i, 0), 0x0100)
+            if (page !== undefined && page !== null)
+                pages[page] = true
+        }
+        root.searchHitPages = pages
+    }
+
     /*!
         \qmlmethod void PdfMultiPageView::searchBack()
 
@@ -473,6 +485,7 @@ Item {
                     visible: image.status === Image.Ready
                              && searchModel.searchString.length > 0
                              && !tableView.moving
+                             && root.searchHitPages[pageHolder.index] === true
                     onVisibleChanged: searchHighlights.update()
                     ShapePath {
                         strokeWidth: -1
@@ -482,7 +495,8 @@ Item {
                             id: searchHighlights
                             function update() {
                                 // paths could be a binding, but we need to be able to "kick" it sometimes
-                                if (!searchModel.searchString.length || tableView.moving) {
+                                if (!searchModel.searchString.length || tableView.moving
+                                        || root.searchHitPages[pageHolder.index] !== true) {
                                     paths = []
                                     return
                                 }
@@ -797,6 +811,8 @@ Item {
         id: searchModel
         document: root.document === undefined ? null : root.document
         onCurrentResultChanged: pageNavigator.jump(currentResultLink)
+        onCountChanged: root.rebuildSearchHitPages()
+        onSearchStringChanged: root.rebuildSearchHitPages()
     }
 
     Menu {
