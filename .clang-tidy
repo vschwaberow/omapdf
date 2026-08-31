@@ -1,0 +1,27 @@
+Checks: >
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  clang-analyzer-*,
+  modernize-*,
+  -modernize-use-trailing-return-type,
+  -modernize-use-nodiscard,
+  -modernize-return-braced-init-list,
+  -modernize-use-integer-sign-comparison,
+  -modernize-loop-convert,
+  performance-*,
+  -performance-no-automatic-move,
+  -performance-enum-size,
+  readability-*,
+  -readability-identifier-length,
+  -readability-magic-numbers,
+  -readability-function-cognitive-complexity,
+  -readability-convert-member-functions-to-static,
+  -readability-redundant-access-specifiers,
+  -readability-implicit-bool-conversion
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*/Sources/omapdf/src/.*'
+FormatStyle: none
+CheckOptions:
+  - key: modernize-use-nullptr.NullMacros
+    value: 'NULL'

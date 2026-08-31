@@ -1,0 +1,11 @@
+/build/
+/build-*/
+/cmake-build-*/
+/.cache/
+*.user
+*.autosave
+.DS_Store
+compile_commands.json
+.clangd/
+AGENTS.local.md
+AGENTS.md.local

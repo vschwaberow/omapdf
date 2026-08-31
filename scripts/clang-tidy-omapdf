@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+args=()
+for a in "$@"; do
+  case "$a" in
+    -mno-direct-extern-access) ;;
+    *) args+=("$a") ;;
+  esac
+done
+exec clang-tidy "${args[@]}"

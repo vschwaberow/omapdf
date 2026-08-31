@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=omapdf
+GenericName=PDF Reader
+GenericName[de]=PDF-Betrachter
+Comment=The fastest, most beautiful PDF reading engine for Linux
+Comment[de]=Die schnellste, schönste PDF-Lese-Engine für Linux
+Keywords=PDF;Viewer;Reader;Omarchy;
+Keywords[de]=PDF;Betrachter;Lesen;Omarchy;
+Exec=omapdf %F
+Icon=omapdf
+Terminal=false
+Categories=Office;Viewer;
+MimeType=application/pdf;
+StartupNotify=true
+StartupWMClass=omapdf

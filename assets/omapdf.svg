@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="iconBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a1b26"/>
+      <stop offset="100%" stop-color="#101017"/>
+    </linearGradient>
+
+    <linearGradient id="accentLine" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7aa2f7"/>
+      <stop offset="100%" stop-color="#bb9af7"/>
+    </linearGradient>
+
+    <filter id="blockGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <!-- Base Icon Squircle -->
+  <rect x="24" y="24" width="464" height="464" rx="96" fill="url(#iconBg)" stroke="#414868" stroke-width="4"/>
+
+  <!-- Subtle Inner Frame / Grid line -->
+  <rect x="48" y="48" width="416" height="416" rx="72" fill="none" stroke="#24283b" stroke-width="2" stroke-dasharray="8 8"/>
+
+  <!-- ================= OMARCHY ANSI BLOCK ART GLYPH ================= -->
+  <g transform="translate(106, 96)" filter="url(#blockGlow)">
+    <!-- Main Outer Block Frame (300 x 320) -->
+    <!-- Top Horizontal Block -->
+    <rect x="0" y="0" width="300" height="36" rx="4" fill="#7aa2f7"/>
+    <!-- Left Vertical Block -->
+    <rect x="0" y="36" width="42" height="248" rx="4" fill="#7aa2f7"/>
+    <!-- Right Vertical Block -->
+    <rect x="258" y="36" width="42" height="248" rx="4" fill="#7aa2f7"/>
+    <!-- Bottom Horizontal Block -->
+    <rect x="0" y="284" width="300" height="36" rx="4" fill="#7aa2f7"/>
+
+    <!-- Inner Maze / PDF Page & Flow Motif (Omarchy Signature) -->
+    <!-- Center Left Arm -->
+    <rect x="80" y="76" width="140" height="32" rx="3" fill="#bb9af7"/>
+    <rect x="80" y="108" width="38" height="104" rx="3" fill="#bb9af7"/>
+    <rect x="80" y="180" width="140" height="32" rx="3" fill="#bb9af7"/>
+
+    <!-- Dynamic Flow Block / "PDF" Continuous Scroll Lines -->
+    <rect x="156" y="128" width="64" height="18" rx="2" fill="#0db9d7"/>
+    <rect x="156" y="152" width="44" height="18" rx="2" fill="#9ece6a"/>
+
+    <!-- Terminal Prompt Pixel Cursor in bottom inner corner -->
+    <rect x="188" y="234" width="32" height="24" rx="2" fill="#c0caf5"/>
+  </g>
+</svg>

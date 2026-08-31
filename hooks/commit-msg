@@ -1,0 +1,6 @@
+#!/bin/sh
+# Strip Cursor attribution trailers.
+msg=$1
+tmp=$1.tmp.$$
+grep -v -E '^[[:space:]]*Co-authored-by:[[:space:]]*Cursor[[:space:]].*$|^[[:space:]]*Made[- ][Ww]ith:[[:space:]]*Cursor[[:space:]]*$|^[[:space:]]*Made with Cursor[[:space:]]*$' "$msg" > "$tmp" || true
+mv "$tmp" "$msg"
