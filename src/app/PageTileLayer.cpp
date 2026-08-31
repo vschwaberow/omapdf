@@ -1,9 +1,10 @@
 #include "app/PageTileLayer.h"
 
+#include "app/PageTileHub.h"
+
 #include <QPainter>
 #include <QPdfDocument>
 #include <QPdfDocumentRenderOptions>
-#include <QPdfPageRenderer>
 #include <QUrl>
 #include <QVariant>
 
@@ -13,37 +14,33 @@ PageTileLayer::PageTileLayer(QQuickItem *parent) : QQuickPaintedItem(parent) {
   setRenderTarget(QQuickPaintedItem::FramebufferObject);
   setPerformanceHint(QQuickPaintedItem::FastFBOResizing, true);
   m_ownDoc = new QPdfDocument(this);
-  m_renderer = new QPdfPageRenderer(this);
-  m_renderer->setRenderMode(QPdfPageRenderer::RenderMode::MultiThreaded);
-  m_renderer->setDocument(m_ownDoc);
-  QObject::connect(
-      m_renderer, &QPdfPageRenderer::pageRendered, this,
-      [this](int page, QSize, const QImage &image, QPdfDocumentRenderOptions,
-             quint64 requestId) {
-        if (page != m_page) {
-          return;
-        }
-        const auto it = m_inflight.constFind(requestId);
-        if (it == m_inflight.cend()) {
-          return;
-        }
-        const Inflight job = it.value();
-        m_inflight.erase(it);
-        if (image.isNull()) {
-          return;
-        }
-        Tile tile;
-        tile.clip = job.clip;
-        tile.image = image;
-        m_tiles.insert(job.key, tile);
-        if (m_status != Ready) {
-          setStatus(Ready);
-        }
-        update();
-      });
 }
 
-PageTileLayer::~PageTileLayer() = default;
+PageTileLayer::~PageTileLayer() { PageTileHub::instance().cancelFor(this); }
+
+void PageTileLayer::acceptTile(quint64 requestId, int page,
+                               const QImage &image) {
+  if (page != m_page) {
+    return;
+  }
+  const auto it = m_inflight.constFind(requestId);
+  if (it == m_inflight.cend()) {
+    return;
+  }
+  const Inflight job = it.value();
+  m_inflight.erase(it);
+  if (image.isNull()) {
+    return;
+  }
+  Tile tile;
+  tile.clip = job.clip;
+  tile.image = image;
+  m_tiles.insert(job.key, tile);
+  if (m_status != Ready) {
+    setStatus(Ready);
+  }
+  update();
+}
 
 void PageTileLayer::setDocument(QObject *document) {
   if (m_documentObj == document) {
@@ -170,7 +167,6 @@ void PageTileLayer::resolveDocument() {
   }
   if (auto *doc = qobject_cast<QPdfDocument *>(m_documentObj)) {
     m_pdf = doc;
-    m_renderer->setDocument(m_pdf);
     return;
   }
   const QVariant source = m_documentObj->property("source");
@@ -192,7 +188,6 @@ void PageTileLayer::resolveDocument() {
     return;
   }
   m_pdf = m_ownDoc;
-  m_renderer->setDocument(m_ownDoc);
 }
 
 QSize PageTileLayer::scaledPageSize() const {
@@ -218,6 +213,7 @@ void PageTileLayer::rebuildSourceSize() {
 }
 
 void PageTileLayer::clearTiles() {
+  PageTileHub::instance().cancelFor(this);
   m_tiles.clear();
   m_inflight.clear();
   setStatus(Loading);
@@ -277,6 +273,7 @@ void PageTileLayer::requestVisibleTiles() {
   const int y1 = qMin((scaled.height() - 1) / kTile,
                       int(std::floor((bottom - 1) / kTile)) + kPrefetch);
 
+  PageTileHub &hub = PageTileHub::instance();
   for (int ty = y0; ty <= y1; ++ty) {
     for (int tx = x0; tx <= x1; ++tx) {
       const TileKey key{tx, ty};
@@ -293,7 +290,10 @@ void PageTileLayer::requestVisibleTiles() {
       QPdfDocumentRenderOptions opts;
       opts.setScaledSize(scaled);
       opts.setScaledClipRect(clip);
-      const quint64 id = m_renderer->requestPage(m_page, clip.size(), opts);
+      const quint64 id = hub.request(m_pdf, m_page, clip.size(), opts, this);
+      if (id == 0) {
+        continue;
+      }
       m_inflight.insert(id, Inflight{key, clip});
     }
   }
@@ -311,11 +311,10 @@ void PageTileLayer::dropFarTiles() {
   if (vis.isEmpty()) {
     vis = QRectF(0, 0, width(), height());
   }
-  const qreal margin = kTile * (kPrefetch + 1) /
-                       (qreal(scaled.width()) / width());
-  const QRectF keep =
-      vis.adjusted(-margin, -margin, margin, margin)
-          .intersected(QRectF(0, 0, width(), height()));
+  const qreal margin =
+      kTile * (kPrefetch + 1) / (qreal(scaled.width()) / width());
+  const QRectF keep = vis.adjusted(-margin, -margin, margin, margin)
+                          .intersected(QRectF(0, 0, width(), height()));
   const qreal scaleX = qreal(scaled.width()) / width();
   const qreal scaleY = qreal(scaled.height()) / height();
   const QRect keepPx(int(std::floor(keep.left() * scaleX)),

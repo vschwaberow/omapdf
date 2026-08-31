@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Share one `QPdfPageRenderer` across page tile layers via `PageTileHub`
 - Debounce tool-rail zoom percent; sharpen after 100 ms idle
 - Pause page-tile requests while flicking; detach link model during move
 - Viewport tile cache: render visible page clips via `PageTileLayer`

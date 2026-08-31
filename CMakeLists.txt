@@ -63,6 +63,8 @@ qt_add_qml_module(omapdf
     src/app/PageWarmup.cpp
     src/app/PageTileLayer.h
     src/app/PageTileLayer.cpp
+    src/app/PageTileHub.h
+    src/app/PageTileHub.cpp
   QML_FILES
     qml/Main.qml
     qml/chrome/TabStrip.qml

@@ -13,7 +13,6 @@
 #include <QString>
 
 class QPdfDocument;
-class QPdfPageRenderer;
 
 class PageTileLayer : public QQuickPaintedItem {
   Q_OBJECT
@@ -65,6 +64,8 @@ public:
   [[nodiscard]] qreal paintedWidth() const { return width(); }
   [[nodiscard]] qreal paintedHeight() const { return height(); }
 
+  void acceptTile(quint64 requestId, int page, const QImage &image);
+
   void paint(QPainter *painter) override;
 
 signals:
@@ -108,7 +109,6 @@ private:
   QObject *m_documentObj{nullptr};
   QPdfDocument *m_pdf{nullptr};
   QPdfDocument *m_ownDoc{nullptr};
-  QPdfPageRenderer *m_renderer{nullptr};
   QString m_ownPath;
   int m_page{-1};
   qreal m_renderScale{1.0};
