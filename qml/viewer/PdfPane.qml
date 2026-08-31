@@ -409,6 +409,7 @@ Item {
         id: pageWarmup
         document: doc
         currentPage: view.currentPage
+        paused: view.viewMoving
     }
 
     Timer {

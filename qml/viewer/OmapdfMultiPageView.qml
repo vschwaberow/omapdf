@@ -52,6 +52,7 @@ Item {
     property var searchHitPages: ({})
     property var selectionGeometry: []
     property int lastTapPage: -1
+    readonly property bool viewMoving: tableView.moving
     property real lastTapX: 0
     property real lastTapY: 0
 
@@ -474,7 +475,7 @@ Item {
                 }
                 Shape {
                     anchors.fill: parent
-                    visible: image.status === Image.Ready
+                    visible: image.status === Image.Ready && root.selectedText.length > 0
                     ShapePath {
                         strokeWidth: -1
                         fillColor: style.selectionColor
@@ -683,7 +684,7 @@ Item {
                         y: rectangle.y * paper.pageScale
                         width: rectangle.width * paper.pageScale
                         height: rectangle.height * paper.pageScale
-                        visible: image.status === Image.Ready
+                        visible: image.status === Image.Ready && !tableView.moving
                         onTapped:
                             (link) => {
                                 if (link.page >= 0)

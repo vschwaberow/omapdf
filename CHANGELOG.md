@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Debounce Ctrl+Wheel zoom; cap page texture edge at 4096 px
 - Skip note markers and current-search stroke while scrolling
 - Warm ±2 pages; debounce warmup tile size on resize
+- Pause page warmup while flicking; hide link hit-targets while moving
+- Selection shape only when text is selected; debounce thumbnail follow
 
 ## [0.1.0] - 2026-08-31
 

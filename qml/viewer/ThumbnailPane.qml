@@ -6,6 +6,7 @@ Rectangle {
     id: root
     property PdfDocument document: null
     property int currentPage: 0
+    property int displayedPage: 0
     color: theme.darkerBackground
     Accessible.name: qsTr("Thumbnails")
     signal navigate(int page)
@@ -17,14 +18,21 @@ Rectangle {
         color: theme.withAlpha(theme.normalBorder, theme.normalBorderAlpha)
     }
 
-    onCurrentPageChanged: Qt.callLater(root.positionViewAtCurrent)
+    onCurrentPageChanged: followDebounce.restart()
+    onDisplayedPageChanged: Qt.callLater(root.positionViewAtCurrent)
+
+    Timer {
+        id: followDebounce
+        interval: 80
+        onTriggered: root.displayedPage = root.currentPage
+    }
     onDocumentChanged: Qt.callLater(root.positionViewAtCurrent)
 
     function positionViewAtCurrent() {
         if (!list.count)
             return
-        if (root.currentPage >= 0 && root.currentPage < list.count)
-            list.positionViewAtIndex(root.currentPage, ListView.Contain)
+        if (root.displayedPage >= 0 && root.displayedPage < list.count)
+            list.positionViewAtIndex(root.displayedPage, ListView.Contain)
     }
 
     ListView {
@@ -47,7 +55,7 @@ Rectangle {
             width: list.width
             height: Math.round(width * 1.35) + theme.fontBaseSize + theme.spaceSm
 
-            readonly property bool selected: index === root.currentPage
+            readonly property bool selected: index === root.displayedPage
 
             Rectangle {
                 anchors.fill: parent

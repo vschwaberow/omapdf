@@ -43,6 +43,17 @@ void PageWarmup::setTileSize(QSize size) {
   warmNeighborhood();
 }
 
+void PageWarmup::setPaused(bool paused) {
+  if (m_paused == paused) {
+    return;
+  }
+  m_paused = paused;
+  emit pausedChanged();
+  if (!m_paused) {
+    warmNeighborhood();
+  }
+}
+
 void PageWarmup::onDocumentStatus() {
   resolveDocument();
   warmNeighborhood();
@@ -83,6 +94,9 @@ void PageWarmup::resolveDocument() {
 }
 
 void PageWarmup::warmNeighborhood() {
+  if (m_paused) {
+    return;
+  }
   if (!m_pdf || m_pdf->status() != QPdfDocument::Status::Ready) {
     return;
   }
