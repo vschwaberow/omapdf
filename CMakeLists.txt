@@ -59,6 +59,8 @@ qt_add_qml_module(omapdf
   SOURCES
     src/app/AnnotStore.h
     src/app/AnnotStore.cpp
+    src/app/PageWarmup.h
+    src/app/PageWarmup.cpp
   QML_FILES
     qml/Main.qml
     qml/chrome/TabStrip.qml

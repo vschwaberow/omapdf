@@ -393,6 +393,13 @@ Item {
         annotStore: annotStore
     }
 
+    PageWarmup {
+        document: doc
+        currentPage: view.currentPage
+        tileSize: Qt.size(Math.max(320, Math.round(root.width)),
+                          Math.max(480, Math.round(root.height)))
+    }
+
     WheelHandler {
         acceptedModifiers: Qt.ControlModifier
         onWheel: (event) => {

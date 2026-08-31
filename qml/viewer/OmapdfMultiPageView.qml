@@ -359,16 +359,30 @@ Item {
         reuseItems: true
         model: root.document ? root.document.pageCount : 0
         rowSpacing: 6
+        property bool sharpRender: true
         property real rotationNorm: Math.round((360 + (root.pageRotation % 360)) % 360)
         property bool rot90: rotationNorm == 90 || rotationNorm == 270
         onRot90Changed: forceLayout()
         onHeightChanged: layoutDebounce.restart()
         onWidthChanged: layoutDebounce.restart()
+        onMovingChanged: {
+            if (moving) {
+                idleSharpen.stop()
+                sharpRender = false
+            } else {
+                idleSharpen.restart()
+            }
+        }
 
         Timer {
             id: layoutDebounce
             interval: 16
             onTriggered: tableView.forceLayout()
+        }
+        Timer {
+            id: idleSharpen
+            interval: 150
+            onTriggered: tableView.sharpRender = true
         }
         property size firstPagePointSize: root.document?.status === PdfDocument.Ready ? root.document.pagePointSize(0) : Qt.size(1, 1)
         property real pageHolderWidth: Math.max(root.width, ((rot90 ? root.document?.maxPageHeight : root.document?.maxPageWidth) ?? 0) * root.renderScale)
@@ -422,11 +436,20 @@ Item {
                     height: paper.pagePointSize.height * root.renderScale
                     property real renderScale: root.renderScale
                     property real oldRenderScale: 1
-                    onRenderScaleChanged: {
-                        image.sourceSize.width = paper.pagePointSize.width * renderScale * Screen.devicePixelRatio
+                    function applySourceSize() {
+                        const dpr = tableView.sharpRender ? Screen.devicePixelRatio : 1.0
+                        image.sourceSize.width = paper.pagePointSize.width * renderScale * dpr
                         image.sourceSize.height = 0
+                    }
+                    onRenderScaleChanged: {
+                        applySourceSize()
                         paper.scale = 1
-                        searchHighlights.update()
+                        if (!pinch.active && !tableView.moving)
+                            searchHighlights.update()
+                    }
+                    Connections {
+                        target: tableView
+                        function onSharpRenderChanged() { image.applySourceSize() }
                     }
                     onStatusChanged: {
                         if (pageHolder.index === pageNavigator.currentPage)
@@ -435,7 +458,21 @@ Item {
                 }
                 Shape {
                     anchors.fill: parent
-                    visible: image.status === Image.Ready && searchModel.searchString.length > 0
+                    visible: image.status === Image.Ready
+                    ShapePath {
+                        strokeWidth: -1
+                        fillColor: style.selectionColor
+                        scale: Qt.size(paper.pageScale, paper.pageScale)
+                        PathMultiline {
+                            paths: selection.geometry
+                        }
+                    }
+                }
+                Shape {
+                    anchors.fill: parent
+                    visible: image.status === Image.Ready
+                             && searchModel.searchString.length > 0
+                             && !tableView.moving
                     onVisibleChanged: searchHighlights.update()
                     ShapePath {
                         strokeWidth: -1
@@ -445,7 +482,7 @@ Item {
                             id: searchHighlights
                             function update() {
                                 // paths could be a binding, but we need to be able to "kick" it sometimes
-                                if (!searchModel.searchString.length) {
+                                if (!searchModel.searchString.length || tableView.moving) {
                                     paths = []
                                     return
                                 }
@@ -459,19 +496,11 @@ Item {
                         // (usually because the search string has changed)
                         function onCurrentPageBoundingPolygonsChanged() { searchHighlights.update() }
                     }
-                    ShapePath {
-                        strokeWidth: -1
-                        fillColor: style.selectionColor
-                        scale: Qt.size(paper.pageScale, paper.pageScale)
-                        PathMultiline {
-                            paths: selection.geometry
-                        }
-                    }
                 }
                 Item {
                     id: annotLayer
                     anchors.fill: parent
-                    visible: image.status === Image.Ready && root.annotStore !== null
+                    visible: image.status === Image.Ready && root.annotStore !== null && !tableView.moving
                     property int kick: 0
                     property var entries: {
                         kick
