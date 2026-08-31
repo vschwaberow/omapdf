@@ -607,7 +607,6 @@ Item {
                                 paper.x = 0
                                 paper.y = 0
                                 root.renderScale *= ratio
-                                tableView.forceLayout()
                                 if (tableView.rotationNorm == 0) {
                                     tableView.contentX = pageHolder.x + tableView.originX + centroidOnPage.x - centroidInFlickable.x
                                     tableView.contentY = pageHolder.y + tableView.originY + centroidOnPage.y - centroidInFlickable.y
@@ -741,7 +740,7 @@ Item {
         if (pageNavigator.jumping)
             return
         // page size changed: TableView needs to redo layout to avoid overlapping delegates or gaps between them
-        tableView.forceLayout()
+        layoutDebounce.restart()
         const cell = tableView.cellAtPos(root.width / 2, root.height / 2)
         const currentItem = tableView.itemAtCell(cell)
         if (currentItem) {

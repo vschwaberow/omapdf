@@ -440,6 +440,16 @@ Item {
 
     Rectangle {
         anchors.fill: parent
+        color: theme.background
+        opacity: doc.status === PdfDocument.Ready ? 0 : 0.92
+        visible: opacity > 0
+        z: 15
+        enabled: false
+        Behavior on opacity { NumberAnimation { duration: 100 } }
+    }
+
+    Rectangle {
+        anchors.fill: parent
         color: theme.darkerBackground
         opacity: root.dimmed ? 0.35 : 0
         visible: opacity > 0
