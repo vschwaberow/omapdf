@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-31
+
 ### Changed
 
 - Reading gate: visible four-tile viewport render budget
@@ -56,4 +58,6 @@ First release.
 
 - Startup failure on Qt 6.11: `TableView` has no `cacheBuffer` property
 
+[Unreleased]: https://github.com/vschwaberow/omapdf/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/vschwaberow/omapdf/releases/tag/v0.2.0
 [0.1.0]: https://github.com/vschwaberow/omapdf/releases/tag/v0.1.0

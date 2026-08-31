@@ -4,7 +4,7 @@
 
 **The fastest, most beautiful PDF reading engine for Linux.**
 
-Native Qt 6 Quick reader for [Omarchy](https://omarchy.org) (Hyprland). Continuous vertical scroll, as-you-type search, live Omarchy theme, tabs, and classic reader parity — under MIT.
+Native Qt 6 Quick reader for [Omarchy](https://omarchy.org) (Hyprland). Continuous vertical scroll with viewport tiles, as-you-type search, live Omarchy theme, tabs, and classic reader parity — under MIT.
 
 **v1 promise:** reading speed and chrome beauty.  
 **Not a v1 claim:** editing, forms, presentation mode. Highlight/notes and page-structure tools ship in the binary as optional power features; see [docs/usage.md](docs/usage.md).
@@ -65,7 +65,7 @@ Or: `xdg-mime default omapdf.desktop application/pdf`
 
 | Area | Behavior |
 |------|----------|
-| Scroll | Continuous multi-page vertical scroll |
+| Scroll | Continuous multi-page scroll; viewport tiles + idle sharpen |
 | Search | `/` or Ctrl+F, as-you-type; `n` / `N` (F3 / Shift+F3) |
 | Theme | Live Omarchy `colors.toml` / `shell.toml` |
 | Tabs | In-app tabs; outline when the PDF has bookmarks |
@@ -76,6 +76,10 @@ Or: `xdg-mime default omapdf.desktop application/pdf`
 Per-document state (zoom, page, scroll, dim) lives under `~/.local/state/omapdf/`.
 
 Keyboard reference and power features: **[docs/usage.md](docs/usage.md)**.
+
+## Version
+
+Current release: **0.2.0**. See [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

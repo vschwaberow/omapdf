@@ -38,6 +38,8 @@ CLI: `omapdf a.pdf b.pdf` → one window, two tabs. A new process is always a ne
 
 Fit width/page stays live with window resize until you zoom manually. Zoom, page, scroll offset, and dim are restored per file.
 
+Pages render as viewport tiles (SceneGraph): low-res placeholder first, then sharp clips; coarser DPI while flicking, sharpen after idle. Ctrl+wheel zoom is debounced.
+
 ## Search
 
 | Action | Keys |
