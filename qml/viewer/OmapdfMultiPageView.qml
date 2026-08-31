@@ -356,7 +356,6 @@ Item {
         property point jumpLocationMargin: Qt.point(10, 10)  // px away from viewport edges
         anchors.fill: parent
         anchors.leftMargin: 2
-        cacheBuffer: root.enabled ? Math.round(height * 2.5) : 0
         reuseItems: true
         model: root.document ? root.document.pageCount : 0
         rowSpacing: 6
