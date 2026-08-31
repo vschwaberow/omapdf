@@ -394,7 +394,7 @@ Item {
         }
         Timer {
             id: idleSharpen
-            interval: 150
+            interval: 100
             onTriggered: tableView.sharpRender = true
         }
         property size firstPagePointSize: root.document?.status === PdfDocument.Ready ? root.document.pagePointSize(0) : Qt.size(1, 1)
@@ -468,6 +468,7 @@ Item {
                     document: root.document
                     page: pageHolder.index
                     renderScale: root.renderScale
+                    paused: tableView.moving
                     width: paper.pagePointSize.width * root.renderScale
                     height: paper.pagePointSize.height * root.renderScale
                     devicePixelRatio: tableView.sharpRender
@@ -694,18 +695,19 @@ Item {
                         selection.forceActiveFocus()
                     }
                 }
+                PdfLinkModel {
+                    id: linkModel
+                    document: root.document
+                    page: image.currentFrame
+                }
                 Repeater {
-                    model: PdfLinkModel {
-                        id: linkModel
-                        document: root.document
-                        page: image.currentFrame
-                    }
+                    model: tableView.moving ? null : linkModel
                     delegate: PdfLinkDelegate {
                         x: rectangle.x * paper.pageScale
                         y: rectangle.y * paper.pageScale
                         width: rectangle.width * paper.pageScale
                         height: rectangle.height * paper.pageScale
-                        visible: image.status === Image.Ready && !tableView.moving
+                        visible: image.status === Image.Ready
                         onTapped:
                             (link) => {
                                 if (link.page >= 0)

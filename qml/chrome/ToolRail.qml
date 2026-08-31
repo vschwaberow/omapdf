@@ -16,7 +16,15 @@ Rectangle {
         return win.activePane()
     }
     readonly property real zoomScale: pane ? pane.renderScale : 1
+    property int zoomPercentShown: Math.round(zoomScale * 100)
     readonly property bool paneDimmed: pane ? pane.dimmed : false
+
+    Timer {
+        id: zoomPercentDebounce
+        interval: 60
+        onTriggered: root.zoomPercentShown = Math.round(root.zoomScale * 100)
+    }
+    onZoomScaleChanged: zoomPercentDebounce.restart()
 
     ColumnLayout {
         anchors.fill: parent
@@ -43,7 +51,7 @@ Rectangle {
 
             Text {
                 anchors.centerIn: parent
-                text: Math.round(root.zoomScale * 100)
+                text: root.zoomPercentShown
                 color: theme.foreground
                 font.pixelSize: Math.max(10, theme.fontBaseSize - 3)
             }

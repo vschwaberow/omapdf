@@ -28,6 +28,7 @@ class PageTileLayer : public QQuickPaintedItem {
                  setDevicePixelRatio NOTIFY devicePixelRatioChanged)
   Q_PROPERTY(QRectF visibleRect READ visibleRect WRITE setVisibleRect NOTIFY
                  visibleRectChanged)
+  Q_PROPERTY(bool paused READ paused WRITE setPaused NOTIFY pausedChanged)
   Q_PROPERTY(int status READ status NOTIFY statusChanged)
   Q_PROPERTY(QSize sourceSize READ sourceSize NOTIFY sourceSizeChanged)
   Q_PROPERTY(qreal paintedWidth READ paintedWidth NOTIFY paintedWidthChanged)
@@ -56,6 +57,9 @@ public:
   [[nodiscard]] QRectF visibleRect() const { return m_visibleRect; }
   void setVisibleRect(const QRectF &rect);
 
+  [[nodiscard]] bool paused() const { return m_paused; }
+  void setPaused(bool paused);
+
   [[nodiscard]] int status() const { return m_status; }
   [[nodiscard]] QSize sourceSize() const { return m_sourceSize; }
   [[nodiscard]] qreal paintedWidth() const { return width(); }
@@ -69,6 +73,7 @@ signals:
   void renderScaleChanged();
   void devicePixelRatioChanged();
   void visibleRectChanged();
+  void pausedChanged();
   void statusChanged();
   void sourceSizeChanged();
   void paintedWidthChanged();
@@ -109,6 +114,8 @@ private:
   qreal m_renderScale{1.0};
   qreal m_dpr{1.0};
   QRectF m_visibleRect;
+  bool m_paused{false};
+  bool m_pendingRescale{false};
   int m_status{Loading};
   QSize m_sourceSize;
   QHash<TileKey, Tile> m_tiles;

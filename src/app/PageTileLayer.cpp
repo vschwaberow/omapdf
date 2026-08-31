@@ -87,10 +87,14 @@ void PageTileLayer::setDevicePixelRatio(qreal dpr) {
     return;
   }
   m_dpr = dpr;
+  emit devicePixelRatioChanged();
+  if (m_paused) {
+    m_pendingRescale = true;
+    return;
+  }
   clearTiles();
   rebuildSourceSize();
   requestVisibleTiles();
-  emit devicePixelRatioChanged();
 }
 
 void PageTileLayer::setVisibleRect(const QRectF &rect) {
@@ -98,9 +102,28 @@ void PageTileLayer::setVisibleRect(const QRectF &rect) {
     return;
   }
   m_visibleRect = rect;
-  requestVisibleTiles();
-  dropFarTiles();
+  if (!m_paused) {
+    requestVisibleTiles();
+    dropFarTiles();
+  }
   emit visibleRectChanged();
+}
+
+void PageTileLayer::setPaused(bool paused) {
+  if (m_paused == paused) {
+    return;
+  }
+  m_paused = paused;
+  emit pausedChanged();
+  if (!m_paused) {
+    if (m_pendingRescale) {
+      m_pendingRescale = false;
+      clearTiles();
+      rebuildSourceSize();
+    }
+    requestVisibleTiles();
+    dropFarTiles();
+  }
 }
 
 void PageTileLayer::geometryChange(const QRectF &newGeometry,
@@ -109,11 +132,15 @@ void PageTileLayer::geometryChange(const QRectF &newGeometry,
   if (newGeometry.size() == oldGeometry.size()) {
     return;
   }
+  emit paintedWidthChanged();
+  emit paintedHeightChanged();
+  if (m_paused) {
+    m_pendingRescale = true;
+    return;
+  }
   clearTiles();
   rebuildSourceSize();
   requestVisibleTiles();
-  emit paintedWidthChanged();
-  emit paintedHeightChanged();
 }
 
 void PageTileLayer::paint(QPainter *painter) {
@@ -215,6 +242,9 @@ bool PageTileLayer::isInflight(const TileKey &key) const {
 }
 
 void PageTileLayer::requestVisibleTiles() {
+  if (m_paused) {
+    return;
+  }
   if (m_pdf == nullptr || m_pdf->status() != QPdfDocument::Status::Ready ||
       m_page < 0 || m_page >= m_pdf->pageCount()) {
     return;
