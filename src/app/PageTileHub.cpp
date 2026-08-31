@@ -38,7 +38,7 @@ quint64 PageTileHub::request(QPdfDocument *document, int page, QSize imageSize,
   if (document == nullptr || layer == nullptr) {
     return 0;
   }
-  if (m_document != document) {
+  if (m_document.data() != document) {
     m_renderer->setDocument(document);
     m_document = document;
   }
@@ -59,5 +59,15 @@ void PageTileHub::cancelFor(PageTileLayer *layer) {
   }
   for (quint64 id : drop) {
     m_jobs.remove(id);
+  }
+}
+
+void PageTileHub::forgetDocument(QPdfDocument *document) {
+  if (document == nullptr) {
+    return;
+  }
+  if (m_document.data() == document) {
+    m_renderer->setDocument(nullptr);
+    m_document.clear();
   }
 }

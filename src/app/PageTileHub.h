@@ -22,6 +22,7 @@ public:
                                 const QPdfDocumentRenderOptions &options,
                                 PageTileLayer *layer, quint64 epoch);
   void cancelFor(PageTileLayer *layer);
+  void forgetDocument(QPdfDocument *document);
 
 private:
   explicit PageTileHub();
@@ -32,6 +33,6 @@ private:
   };
 
   QPdfPageRenderer *m_renderer{nullptr};
-  QPdfDocument *m_document{nullptr};
+  QPointer<QPdfDocument> m_document;
   QHash<quint64, Job> m_jobs;
 };

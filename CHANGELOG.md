@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Shutdown no longer segfaults when `QPdfDocument` closes under `PageWarmup`/`PageTileLayer`
+- Restore `QQuickPaintedItem` page tiles (drop SceneGraph recreate-every-frame path)
+- Placeholder requests use matching scaledSize and imageSize
+
 ## [0.2.1] - 2026-08-31
 
 ### Fixed

@@ -2,7 +2,6 @@
 
 #include "app/PdfDocumentAccess.h"
 
-#include <QPdfDocument>
 #include <QPdfPageRenderer>
 
 PageWarmup::PageWarmup(QObject *parent) : QObject(parent) {
@@ -10,7 +9,9 @@ PageWarmup::PageWarmup(QObject *parent) : QObject(parent) {
   m_renderer->setRenderMode(QPdfPageRenderer::RenderMode::MultiThreaded);
 }
 
-PageWarmup::~PageWarmup() = default;
+PageWarmup::~PageWarmup() {
+  clearPdf();
+}
 
 void PageWarmup::setDocument(QObject *document) {
   if (m_documentObj == document) {
@@ -28,7 +29,6 @@ void PageWarmup::setCurrentPage(int page) {
   }
   m_currentPage = page;
   emit currentPageChanged();
-  resolveDocument();
   warmNeighborhood();
 }
 
@@ -52,30 +52,40 @@ void PageWarmup::setPaused(bool paused) {
   }
 }
 
-void PageWarmup::onDocumentStatus() {
-  resolveDocument();
-  warmNeighborhood();
-}
-
-void PageWarmup::resolveDocument() {
+void PageWarmup::clearPdf() {
   if (m_statusConn) {
     QObject::disconnect(m_statusConn);
     m_statusConn = {};
   }
-  m_pdf = pdfDocumentFrom(m_documentObj);
-  m_renderer->setDocument(m_pdf);
-  if (m_pdf == nullptr) {
+  m_renderer->setDocument(nullptr);
+  m_pdf.clear();
+}
+
+void PageWarmup::onPdfStatus(QPdfDocument::Status status) {
+  if (status == QPdfDocument::Status::Ready) {
+    warmNeighborhood();
     return;
   }
-  m_statusConn = QObject::connect(m_pdf, &QPdfDocument::statusChanged, this,
-                                  &PageWarmup::onDocumentStatus);
+  clearPdf();
+}
+
+void PageWarmup::resolveDocument() {
+  clearPdf();
+  m_pdf = pdfDocumentFrom(m_documentObj);
+  m_renderer->setDocument(m_pdf.data());
+  if (m_pdf.isNull()) {
+    return;
+  }
+  m_statusConn = QObject::connect(
+      m_pdf.data(), &QPdfDocument::statusChanged, this,
+      &PageWarmup::onPdfStatus);
 }
 
 void PageWarmup::warmNeighborhood() {
   if (m_paused) {
     return;
   }
-  if (!m_pdf || m_pdf->status() != QPdfDocument::Status::Ready) {
+  if (m_pdf.isNull() || m_pdf->status() != QPdfDocument::Status::Ready) {
     return;
   }
   if (m_currentPage < 0) {

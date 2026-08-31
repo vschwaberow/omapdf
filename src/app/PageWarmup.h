@@ -2,11 +2,12 @@
 
 #include <QtQml/qqmlregistration.h>
 
-#include <QObject>
 #include <QMetaObject>
+#include <QObject>
+#include <QPdfDocument>
+#include <QPointer>
 #include <QSize>
 
-class QPdfDocument;
 class QPdfPageRenderer;
 
 class PageWarmup : public QObject {
@@ -41,15 +42,14 @@ signals:
   void tileSizeChanged();
   void pausedChanged();
 
-private slots:
-  void onDocumentStatus();
-
 private:
   void resolveDocument();
   void warmNeighborhood();
+  void clearPdf();
+  void onPdfStatus(QPdfDocument::Status status);
 
   QObject *m_documentObj{nullptr};
-  QPdfDocument *m_pdf{nullptr};
+  QPointer<QPdfDocument> m_pdf;
   QMetaObject::Connection m_statusConn;
   QPdfPageRenderer *m_renderer{nullptr};
   int m_currentPage{-1};

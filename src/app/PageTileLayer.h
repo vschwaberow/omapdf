@@ -7,16 +7,15 @@
 #include <QMetaObject>
 #include <QObject>
 #include <QPair>
-#include <QQuickItem>
+#include <QPdfDocument>
+#include <QPointer>
+#include <QQuickPaintedItem>
 #include <QRect>
 #include <QRectF>
 #include <QSize>
 #include <QVector>
 
-class QPdfDocument;
-class QSGNode;
-
-class PageTileLayer : public QQuickItem {
+class PageTileLayer : public QQuickPaintedItem {
   Q_OBJECT
   QML_ELEMENT
   Q_PROPERTY(QObject *document READ document WRITE setDocument NOTIFY
@@ -69,6 +68,8 @@ public:
   void acceptTile(quint64 requestId, int page, const QImage &image,
                   quint64 epoch);
 
+  void paint(QPainter *painter) override;
+
 signals:
   void documentChanged();
   void pageChanged();
@@ -84,8 +85,6 @@ signals:
 protected:
   void geometryChange(const QRectF &newGeometry,
                       const QRectF &oldGeometry) override;
-  QSGNode *updatePaintNode(QSGNode *oldNode,
-                           UpdatePaintNodeData *data) override;
 
 private:
   using TileKey = QPair<int, int>;
@@ -109,6 +108,8 @@ private:
   void invalidateGeneration();
   void beginRescale();
   void clearAllTiles();
+  void clearPdf();
+  void onPdfStatus(QPdfDocument::Status status);
   void requestVisibleTiles();
   void requestPlaceholder();
   void dropFarTiles();
@@ -121,7 +122,7 @@ private:
   [[nodiscard]] QRectF tileDestRect(const Tile &tile) const;
 
   QObject *m_documentObj{nullptr};
-  QPdfDocument *m_pdf{nullptr};
+  QPointer<QPdfDocument> m_pdf;
   QMetaObject::Connection m_statusConn;
   int m_page{-1};
   qreal m_renderScale{1.0};

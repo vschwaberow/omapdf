@@ -3,45 +3,20 @@
 #include "app/PageTileHub.h"
 #include "app/PdfDocumentAccess.h"
 
-#include <QPdfDocument>
+#include <QPainter>
 #include <QPdfDocumentRenderOptions>
-#include <QQuickWindow>
-#include <QSGImageNode>
-#include <QSGNode>
-#include <QSGTexture>
 
 #include <algorithm>
 #include <cmath>
 
-namespace {
-
-QSGImageNode *makeImageNode(QQuickWindow *window, const QImage &image,
-                            const QRectF &rect) {
-  if (window == nullptr || image.isNull() || rect.isEmpty()) {
-    return nullptr;
-  }
-  QSGTexture *texture = window->createTextureFromImage(
-      image, QQuickWindow::TextureCanUseAtlas);
-  if (texture == nullptr) {
-    return nullptr;
-  }
-  QSGImageNode *node = window->createImageNode();
-  node->setTexture(texture);
-  node->setOwnsTexture(true);
-  node->setRect(rect);
-  node->setFiltering(QSGTexture::Linear);
-  node->setMipmapFiltering(QSGTexture::None);
-  return node;
-}
-
-} // namespace
-
-PageTileLayer::PageTileLayer(QQuickItem *parent) : QQuickItem(parent) {
-  setFlag(ItemHasContents, true);
+PageTileLayer::PageTileLayer(QQuickItem *parent) : QQuickPaintedItem(parent) {
+  setRenderTarget(QQuickPaintedItem::FramebufferObject);
+  setPerformanceHint(QQuickPaintedItem::FastFBOResizing, true);
 }
 
 PageTileLayer::~PageTileLayer() {
   PageTileHub::instance().cancelFor(this);
+  clearPdf();
   ++m_epoch;
 }
 
@@ -181,7 +156,7 @@ void PageTileLayer::setPaused(bool paused) {
 
 void PageTileLayer::geometryChange(const QRectF &newGeometry,
                                    const QRectF &oldGeometry) {
-  QQuickItem::geometryChange(newGeometry, oldGeometry);
+  QQuickPaintedItem::geometryChange(newGeometry, oldGeometry);
   if (newGeometry.size() == oldGeometry.size()) {
     return;
   }
@@ -194,68 +169,68 @@ void PageTileLayer::geometryChange(const QRectF &newGeometry,
   beginRescale();
 }
 
-QSGNode *PageTileLayer::updatePaintNode(QSGNode *oldNode,
-                                        UpdatePaintNodeData *) {
-  delete oldNode;
-  auto *root = new QSGNode;
+void PageTileLayer::paint(QPainter *painter) {
+  if (width() <= 0 || height() <= 0) {
+    return;
+  }
+  painter->setRenderHint(QPainter::SmoothPixmapTransform, true);
 
-  QQuickWindow *win = window();
-  if (win == nullptr || width() <= 0 || height() <= 0) {
-    return root;
+  if (!m_placeholder.isNull()) {
+    painter->drawImage(QRectF(0, 0, width(), height()), m_placeholder);
   }
 
-  if (!m_placeholder.isNull() && !m_placeholderBasis.isEmpty()) {
-    const QRectF dest(0, 0, width(), height());
-    if (QSGImageNode *node = makeImageNode(win, m_placeholder, dest)) {
-      root->appendChildNode(node);
-    }
-  }
-
-  QVector<const Tile *> current;
-  QVector<const Tile *> stale;
-  current.reserve(m_tiles.size());
-  stale.reserve(m_tiles.size());
   for (const Tile &tile : m_tiles) {
     if (tile.image.isNull()) {
       continue;
     }
     if (tile.current && tile.basis == m_sourceSize) {
-      current.append(&tile);
-    } else {
-      stale.append(&tile);
+      continue;
+    }
+    const QRectF dest = tileDestRect(tile);
+    if (!dest.isEmpty()) {
+      painter->drawImage(dest, tile.image);
     }
   }
-
-  for (const Tile *tile : stale) {
-    if (QSGImageNode *node =
-            makeImageNode(win, tile->image, tileDestRect(*tile))) {
-      root->appendChildNode(node);
+  for (const Tile &tile : m_tiles) {
+    if (tile.image.isNull() || !tile.current || tile.basis != m_sourceSize) {
+      continue;
+    }
+    const QRectF dest = tileDestRect(tile);
+    if (!dest.isEmpty()) {
+      painter->drawImage(dest, tile.image);
     }
   }
-  for (const Tile *tile : current) {
-    if (QSGImageNode *node =
-            makeImageNode(win, tile->image, tileDestRect(*tile))) {
-      root->appendChildNode(node);
-    }
-  }
-  return root;
 }
 
-void PageTileLayer::resolveDocument() {
+void PageTileLayer::clearPdf() {
   if (m_statusConn) {
     QObject::disconnect(m_statusConn);
     m_statusConn = {};
   }
-  m_pdf = pdfDocumentFrom(m_documentObj);
-  if (m_pdf == nullptr) {
+  if (!m_pdf.isNull()) {
+    PageTileHub::instance().forgetDocument(m_pdf.data());
+  }
+  m_pdf.clear();
+}
+
+void PageTileLayer::onPdfStatus(QPdfDocument::Status status) {
+  if (status == QPdfDocument::Status::Ready) {
+    rebuildSourceSize();
+    requestVisibleTiles();
     return;
   }
-  m_statusConn = QObject::connect(
-      m_pdf, &QPdfDocument::statusChanged, this,
-      [this](QPdfDocument::Status) {
-        rebuildSourceSize();
-        requestVisibleTiles();
-      });
+  PageTileHub::instance().cancelFor(this);
+  clearPdf();
+}
+
+void PageTileLayer::resolveDocument() {
+  clearPdf();
+  m_pdf = pdfDocumentFrom(m_documentObj);
+  if (m_pdf.isNull()) {
+    return;
+  }
+  m_statusConn = QObject::connect(m_pdf.data(), &QPdfDocument::statusChanged,
+                                  this, &PageTileLayer::onPdfStatus);
 }
 
 QSize PageTileLayer::scaledPageSize() const {
@@ -348,7 +323,7 @@ QRectF PageTileLayer::tileDestRect(const Tile &tile) const {
 }
 
 void PageTileLayer::requestPlaceholder() {
-  if (m_paused || m_placeholderInflight || m_pdf == nullptr ||
+  if (m_paused || m_placeholderInflight || m_pdf.isNull() ||
       m_pdf->status() != QPdfDocument::Status::Ready || m_page < 0 ||
       m_page >= m_pdf->pageCount()) {
     return;
@@ -362,9 +337,9 @@ void PageTileLayer::requestPlaceholder() {
   }
   const QSize small(qMax(1, scaled.width() / 4), qMax(1, scaled.height() / 4));
   QPdfDocumentRenderOptions opts;
-  opts.setScaledSize(scaled);
-  const quint64 id = PageTileHub::instance().request(m_pdf, m_page, small, opts,
-                                                     this, m_epoch);
+  opts.setScaledSize(small);
+  const quint64 id = PageTileHub::instance().request(m_pdf.data(), m_page, small,
+                                                     opts, this, m_epoch);
   if (id == 0) {
     return;
   }
@@ -376,7 +351,7 @@ void PageTileLayer::requestVisibleTiles() {
   if (m_paused) {
     return;
   }
-  if (m_pdf == nullptr || m_pdf->status() != QPdfDocument::Status::Ready ||
+  if (m_pdf.isNull() || m_pdf->status() != QPdfDocument::Status::Ready ||
       m_page < 0 || m_page >= m_pdf->pageCount()) {
     return;
   }
@@ -483,7 +458,7 @@ void PageTileLayer::requestVisibleTiles() {
     opts.setScaledSize(scaled);
     opts.setScaledClipRect(c.clip);
     const quint64 id =
-        hub.request(m_pdf, m_page, c.clip.size(), opts, this, m_epoch);
+        hub.request(m_pdf.data(), m_page, c.clip.size(), opts, this, m_epoch);
     if (id == 0) {
       continue;
     }
