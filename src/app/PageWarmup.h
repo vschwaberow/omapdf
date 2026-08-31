@@ -3,8 +3,8 @@
 #include <QtQml/qqmlregistration.h>
 
 #include <QObject>
+#include <QMetaObject>
 #include <QSize>
-#include <QString>
 
 class QPdfDocument;
 class QPdfPageRenderer;
@@ -50,9 +50,8 @@ private:
 
   QObject *m_documentObj{nullptr};
   QPdfDocument *m_pdf{nullptr};
-  QPdfDocument *m_ownDoc{nullptr};
+  QMetaObject::Connection m_statusConn;
   QPdfPageRenderer *m_renderer{nullptr};
-  QString m_ownPath;
   int m_currentPage{-1};
   QSize m_tileSize{720, 960};
   bool m_paused{false};

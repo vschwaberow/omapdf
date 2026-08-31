@@ -85,7 +85,7 @@ Rectangle {
                         currentFrame: del.index
                         asynchronous: true
                         fillMode: Image.PreserveAspectFit
-                        sourceSize.width: Math.round(width * Screen.devicePixelRatio)
+                        sourceSize.width: Math.min(256, Math.round(width * Screen.devicePixelRatio))
                         sourceSize.height: 0
                     }
                     Text {

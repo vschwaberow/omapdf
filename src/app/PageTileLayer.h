@@ -3,6 +3,7 @@
 #include <QtQml/qqmlregistration.h>
 
 #include <QHash>
+#include <QMetaObject>
 #include <QImage>
 #include <QObject>
 #include <QPair>
@@ -10,7 +11,6 @@
 #include <QRect>
 #include <QRectF>
 #include <QSize>
-#include <QString>
 
 class QPdfDocument;
 
@@ -108,8 +108,7 @@ private:
 
   QObject *m_documentObj{nullptr};
   QPdfDocument *m_pdf{nullptr};
-  QPdfDocument *m_ownDoc{nullptr};
-  QString m_ownPath;
+  QMetaObject::Connection m_statusConn;
   int m_page{-1};
   qreal m_renderScale{1.0};
   qreal m_dpr{1.0};

@@ -1,14 +1,13 @@
 #include "app/PageWarmup.h"
 
+#include "app/PdfDocumentAccess.h"
+
 #include <QPdfDocument>
 #include <QPdfPageRenderer>
-#include <QUrl>
 
 PageWarmup::PageWarmup(QObject *parent) : QObject(parent) {
-  m_ownDoc = new QPdfDocument(this);
   m_renderer = new QPdfPageRenderer(this);
   m_renderer->setRenderMode(QPdfPageRenderer::RenderMode::MultiThreaded);
-  m_renderer->setDocument(m_ownDoc);
 }
 
 PageWarmup::~PageWarmup() = default;
@@ -18,7 +17,6 @@ void PageWarmup::setDocument(QObject *document) {
     return;
   }
   m_documentObj = document;
-  m_ownPath.clear();
   resolveDocument();
   emit documentChanged();
   warmNeighborhood();
@@ -60,37 +58,17 @@ void PageWarmup::onDocumentStatus() {
 }
 
 void PageWarmup::resolveDocument() {
-  m_pdf = nullptr;
-  if (!m_documentObj) {
-    m_ownDoc->close();
-    m_ownPath.clear();
+  if (m_statusConn) {
+    QObject::disconnect(m_statusConn);
+    m_statusConn = {};
+  }
+  m_pdf = pdfDocumentFrom(m_documentObj);
+  m_renderer->setDocument(m_pdf);
+  if (m_pdf == nullptr) {
     return;
   }
-  if (auto *doc = qobject_cast<QPdfDocument *>(m_documentObj)) {
-    m_pdf = doc;
-    m_renderer->setDocument(m_pdf);
-    return;
-  }
-  const QVariant source = m_documentObj->property("source");
-  if (!source.isValid()) {
-    return;
-  }
-  const QUrl url = source.toUrl();
-  const QString path = url.isLocalFile() ? url.toLocalFile() : url.toString();
-  if (path.isEmpty()) {
-    return;
-  }
-  if (m_ownDoc->status() == QPdfDocument::Status::Ready && m_ownPath == path) {
-    m_pdf = m_ownDoc;
-    return;
-  }
-  m_ownPath = path;
-  if (m_ownDoc->load(path) != QPdfDocument::Error::None) {
-    m_pdf = nullptr;
-    return;
-  }
-  m_pdf = m_ownDoc;
-  m_renderer->setDocument(m_ownDoc);
+  m_statusConn = QObject::connect(m_pdf, &QPdfDocument::statusChanged, this,
+                                  &PageWarmup::onDocumentStatus);
 }
 
 void PageWarmup::warmNeighborhood() {

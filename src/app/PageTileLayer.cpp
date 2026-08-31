@@ -1,19 +1,17 @@
 #include "app/PageTileLayer.h"
 
 #include "app/PageTileHub.h"
+#include "app/PdfDocumentAccess.h"
 
 #include <QPainter>
 #include <QPdfDocument>
 #include <QPdfDocumentRenderOptions>
-#include <QUrl>
-#include <QVariant>
 
 #include <cmath>
 
 PageTileLayer::PageTileLayer(QQuickItem *parent) : QQuickPaintedItem(parent) {
   setRenderTarget(QQuickPaintedItem::FramebufferObject);
   setPerformanceHint(QQuickPaintedItem::FastFBOResizing, true);
-  m_ownDoc = new QPdfDocument(this);
 }
 
 PageTileLayer::~PageTileLayer() { PageTileHub::instance().cancelFor(this); }
@@ -47,7 +45,6 @@ void PageTileLayer::setDocument(QObject *document) {
     return;
   }
   m_documentObj = document;
-  m_ownPath.clear();
   resolveDocument();
   clearTiles();
   rebuildSourceSize();
@@ -159,35 +156,20 @@ void PageTileLayer::paint(QPainter *painter) {
 }
 
 void PageTileLayer::resolveDocument() {
-  m_pdf = nullptr;
-  if (m_documentObj == nullptr) {
-    m_ownDoc->close();
-    m_ownPath.clear();
+  if (m_statusConn) {
+    QObject::disconnect(m_statusConn);
+    m_statusConn = {};
+  }
+  m_pdf = pdfDocumentFrom(m_documentObj);
+  if (m_pdf == nullptr) {
     return;
   }
-  if (auto *doc = qobject_cast<QPdfDocument *>(m_documentObj)) {
-    m_pdf = doc;
-    return;
-  }
-  const QVariant source = m_documentObj->property("source");
-  if (!source.isValid()) {
-    return;
-  }
-  const QUrl url = source.toUrl();
-  const QString path = url.isLocalFile() ? url.toLocalFile() : url.toString();
-  if (path.isEmpty()) {
-    return;
-  }
-  if (m_ownDoc->status() == QPdfDocument::Status::Ready && m_ownPath == path) {
-    m_pdf = m_ownDoc;
-    return;
-  }
-  m_ownPath = path;
-  if (m_ownDoc->load(path) != QPdfDocument::Error::None) {
-    m_pdf = nullptr;
-    return;
-  }
-  m_pdf = m_ownDoc;
+  m_statusConn = QObject::connect(
+      m_pdf, &QPdfDocument::statusChanged, this,
+      [this](QPdfDocument::Status) {
+        rebuildSourceSize();
+        requestVisibleTiles();
+      });
 }
 
 QSize PageTileLayer::scaledPageSize() const {
