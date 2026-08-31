@@ -371,11 +371,11 @@ Item {
         anchors.leftMargin: 2
         reuseItems: true
         model: root.document ? root.document.pageCount : 0
+        onModelChanged: rebuildPageExtentCache()
         rowSpacing: 6
         property bool sharpRender: true
         property real rotationNorm: Math.round((360 + (root.pageRotation % 360)) % 360)
         property bool rot90: rotationNorm == 90 || rotationNorm == 270
-        onRot90Changed: forceLayout()
         onHeightChanged: layoutDebounce.restart()
         onWidthChanged: layoutDebounce.restart()
         onMovingChanged: {
@@ -399,8 +399,32 @@ Item {
         }
         property size firstPagePointSize: root.document?.status === PdfDocument.Ready ? root.document.pagePointSize(0) : Qt.size(1, 1)
         property real pageHolderWidth: Math.max(root.width, ((rot90 ? root.document?.maxPageHeight : root.document?.maxPageWidth) ?? 0) * root.renderScale)
+        property var pageExtentCache: []
+        function rebuildPageExtentCache() {
+            const doc = root.document
+            if (!doc || doc.status !== PdfDocument.Ready) {
+                pageExtentCache = []
+                return
+            }
+            const n = doc.pageCount
+            const extents = new Array(n)
+            for (let i = 0; i < n; ++i) {
+                const sz = doc.pagePointSize(i)
+                extents[i] = rot90 ? sz.width : sz.height
+            }
+            pageExtentCache = extents
+        }
+        onRot90Changed: {
+            rebuildPageExtentCache()
+            forceLayout()
+        }
         columnWidthProvider: function(col) { return root.document ? pageHolderWidth + vscroll.width + 2 : 0 }
-        rowHeightProvider: function(row) { return (rot90 ? root.document.pagePointSize(row).width : root.document.pagePointSize(row).height) * root.renderScale }
+        rowHeightProvider: function(row) {
+            const ext = pageExtentCache[row]
+            if (ext === undefined)
+                return (rot90 ? root.document.pagePointSize(row).width : root.document.pagePointSize(row).height) * root.renderScale
+            return ext * root.renderScale
+        }
 
         // delayed-jump feature in case the user called goToPage() or goToLocation() too early
         property int pendingRow: -1
@@ -450,7 +474,9 @@ Item {
                     property real renderScale: root.renderScale
                     property real oldRenderScale: 1
                     function applySourceSize() {
-                        const dpr = tableView.sharpRender ? Screen.devicePixelRatio : 1.0
+                        const dpr = tableView.sharpRender
+                                    ? Screen.devicePixelRatio
+                                    : Math.min(1.0, Screen.devicePixelRatio * 0.75)
                         let w = paper.pagePointSize.width * renderScale * dpr
                         const maxEdge = 4096
                         if (w > maxEdge)
@@ -475,7 +501,9 @@ Item {
                 }
                 Shape {
                     anchors.fill: parent
-                    visible: image.status === Image.Ready && root.selectedText.length > 0
+                    visible: image.status === Image.Ready
+                             && !tableView.moving
+                             && root.selectedText.length > 0
                     ShapePath {
                         strokeWidth: -1
                         fillColor: style.selectionColor
@@ -813,6 +841,15 @@ Item {
             tableView.contentY = 0
         }
     }
+
+    Connections {
+        target: root.document
+        function onStatusChanged() {
+            if (root.document && root.document.status === PdfDocument.Ready)
+                tableView.rebuildPageExtentCache()
+        }
+    }
+
     PdfSearchModel {
         id: searchModel
         document: root.document === undefined ? null : root.document

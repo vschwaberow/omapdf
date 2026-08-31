@@ -39,12 +39,42 @@ Item {
     signal requestExtract()
     signal requestMerge()
 
-    readonly property string statusLine: {
-        if (doc.status !== PdfDocument.Ready)
-            return path
+    property string statusLine: ""
+
+    function refreshStatusLine() {
+        if (doc.status !== PdfDocument.Ready) {
+            statusLine = path
+            return
+        }
         const dirtyMark = annotStore.dirty ? " *" : ""
-        return (docTitle() + dirtyMark + " · " + (view.currentPage + 1) + "/" + doc.pageCount
+        statusLine = (docTitle() + dirtyMark + " · " + (view.currentPage + 1) + "/" + doc.pageCount
                 + " · " + Math.round(view.renderScale * 100) + "%")
+    }
+
+    Timer {
+        id: statusDebounce
+        interval: 60
+        onTriggered: root.refreshStatusLine()
+    }
+
+    Connections {
+        target: view
+        function onCurrentPageChanged() {
+            if (view.viewMoving)
+                statusDebounce.restart()
+            else
+                root.refreshStatusLine()
+        }
+        function onRenderScaleChanged() { statusDebounce.restart() }
+        function onViewMovingChanged() {
+            if (!view.viewMoving)
+                root.refreshStatusLine()
+        }
+    }
+
+    Connections {
+        target: annotStore
+        function onDirtyChanged() { root.refreshStatusLine() }
     }
 
     AnnotStore {
@@ -572,6 +602,7 @@ Item {
 
     Component.onCompleted: {
         annotStore.activeColor = app.annotColor()
+        root.refreshStatusLine()
         if (enabled)
             openDocument()
     }

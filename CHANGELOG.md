@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Warm ±2 pages; debounce warmup tile size on resize
 - Pause page warmup while flicking; hide link hit-targets while moving
 - Selection shape only when text is selected; debounce thumbnail follow
+- Cache page extents for TableView row heights; coarser scroll-time DPR
+- Debounce status-line updates while scrolling; hide selection while moving
 
 ## [0.1.0] - 2026-08-31
 
