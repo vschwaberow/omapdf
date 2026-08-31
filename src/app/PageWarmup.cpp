@@ -90,7 +90,7 @@ void PageWarmup::warmNeighborhood() {
     return;
   }
   const int count = m_pdf->pageCount();
-  for (int delta = -1; delta <= 1; ++delta) {
+  for (int delta = -2; delta <= 2; ++delta) {
     if (delta == 0) {
       continue;
     }

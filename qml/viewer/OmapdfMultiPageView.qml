@@ -450,7 +450,11 @@ Item {
                     property real oldRenderScale: 1
                     function applySourceSize() {
                         const dpr = tableView.sharpRender ? Screen.devicePixelRatio : 1.0
-                        image.sourceSize.width = paper.pagePointSize.width * renderScale * dpr
+                        let w = paper.pagePointSize.width * renderScale * dpr
+                        const maxEdge = 4096
+                        if (w > maxEdge)
+                            w = maxEdge
+                        image.sourceSize.width = w
                         image.sourceSize.height = 0
                     }
                     onRenderScaleChanged: {
@@ -545,7 +549,7 @@ Item {
                 }
                 Repeater {
                     model: {
-                        if (!root.annotStore)
+                        if (tableView.moving || !root.annotStore)
                             return []
                         annotLayer.kick
                         return root.annotStore.notesOnPage(pageHolder.index)
@@ -566,7 +570,9 @@ Item {
                 }
                 Shape {
                     anchors.fill: parent
-                    visible: image.status === Image.Ready && searchModel.currentPage === pageHolder.index
+                    visible: image.status === Image.Ready
+                             && !tableView.moving
+                             && searchModel.currentPage === pageHolder.index
                     ShapePath {
                         strokeWidth: style.currentSearchResultStrokeWidth
                         strokeColor: style.currentSearchResultStrokeColor

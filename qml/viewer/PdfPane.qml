@@ -79,9 +79,21 @@ Item {
     function searchText() { return view.searchString }
     function searchForward() { view.searchForward() }
     function searchBack() { view.searchBack() }
+    property real pendingZoomFactor: 1
+
     function zoomBy(factor) {
         fitMode = ""
-        view.renderScale = Math.max(0.25, Math.min(4, view.renderScale * factor))
+        pendingZoomFactor *= factor
+        zoomDebounce.restart()
+    }
+
+    Timer {
+        id: zoomDebounce
+        interval: 40
+        onTriggered: {
+            view.renderScale = Math.max(0.25, Math.min(4, view.renderScale * root.pendingZoomFactor))
+            root.pendingZoomFactor = 1
+        }
     }
     function fitWidth() {
         fitMode = "width"
@@ -394,11 +406,22 @@ Item {
     }
 
     PageWarmup {
+        id: pageWarmup
         document: doc
         currentPage: view.currentPage
-        tileSize: Qt.size(Math.max(320, Math.round(root.width)),
-                          Math.max(480, Math.round(root.height)))
     }
+
+    Timer {
+        id: warmupTileDebounce
+        interval: 100
+        running: true
+        onTriggered: {
+            pageWarmup.tileSize = Qt.size(
+                Math.max(320, Math.round(root.width)),
+                Math.max(480, Math.round(root.height)))
+        }
+    }
+
 
     WheelHandler {
         acceptedModifiers: Qt.ControlModifier
@@ -421,8 +444,14 @@ Item {
         }
     }
 
-    onWidthChanged: Qt.callLater(applyFitMode)
-    onHeightChanged: Qt.callLater(applyFitMode)
+    onWidthChanged: {
+        warmupTileDebounce.restart()
+        Qt.callLater(applyFitMode)
+    }
+    onHeightChanged: {
+        warmupTileDebounce.restart()
+        Qt.callLater(applyFitMode)
+    }
 
     Connections {
         target: view

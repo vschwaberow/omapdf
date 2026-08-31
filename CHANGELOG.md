@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cache annot polygons/notes per page in `AnnotStore`
 - Loading veil on tab open until the PDF is ready; coalesce pinch/scale layouts
 - Reading gate covers idle-sharpen render windows
+- Debounce Ctrl+Wheel zoom; cap page texture edge at 4096 px
+- Skip note markers and current-search stroke while scrolling
+- Warm ±2 pages; debounce warmup tile size on resize
 
 ## [0.1.0] - 2026-08-31
 
