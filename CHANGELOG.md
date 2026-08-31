@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Faster flick scrolling: lower page raster DPI while moving, sharpen after idle
+- Hide search and annot overlays during scroll; skip search shapes on pages without hits
+- Warm adjacent pages via `PageWarmup` (`QPdfPageRenderer`)
+- Cache annot polygons/notes per page in `AnnotStore`
+- Loading veil on tab open until the PDF is ready; coalesce pinch/scale layouts
+- Reading gate covers idle-sharpen render windows
+
 ## [0.1.0] - 2026-08-31
 
 First release.
