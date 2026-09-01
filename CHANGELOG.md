@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-09-01
+
+### Added
+
+- Tool rail buttons for copy selection, select-all (page), and highlight
+- C++ text selection domain (`PdfTextSource`, `TextSelectionModel`, `Algorithms`) with QML gestures only
+- `text_selection` ctest target (76 edge-case algorithm tests)
+- `scripts/build_and_test.sh` and `scripts/install.sh`
+
+### Changed
+
+- Pinch zoom accepts touch only so mouse/stylus can select text
+
+### Fixed
+
+- Mouse text selection no longer loses the grab to pinch / flick; highlight stays during drag
+- Acrobat-style selection: word (double-click), line (triple-click), shift-extend, click-to-clear, edge auto-scroll
+- Cross-page text selection while dragging or shift-extending across page breaks
+- Word-snap while dragging; continuous edge auto-scroll; multi-page highlight from one selection
+- Selection highlight only on the active page
+- PdfSearchModel startup warning when there are no search hits (`failed to find result 0 in range 0 -> 0`)
+
 ## [0.2.2] - 2026-09-01
 
 ### Fixed
@@ -87,7 +109,8 @@ First release.
 
 - Startup failure on Qt 6.11: `TableView` has no `cacheBuffer` property
 
-[Unreleased]: https://github.com/vschwaberow/omapdf/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/vschwaberow/omapdf/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/vschwaberow/omapdf/releases/tag/v0.2.3
 [0.2.2]: https://github.com/vschwaberow/omapdf/releases/tag/v0.2.2
 [0.2.1]: https://github.com/vschwaberow/omapdf/releases/tag/v0.2.1
 [0.2.0]: https://github.com/vschwaberow/omapdf/releases/tag/v0.2.0

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(omapdf VERSION 0.2.2 LANGUAGES CXX)
+project(omapdf VERSION 0.2.3 LANGUAGES CXX)
 
 configure_file(
   ${CMAKE_SOURCE_DIR}/src/version.h.in
@@ -35,6 +35,7 @@ add_library(omapdf_core STATIC
   src/app/LinkGuard.cpp
   src/app/StructureEngine.cpp
   src/app/LocaleTranslator.cpp
+  src/selection/Algorithms.cpp
 )
 target_include_directories(omapdf_core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -61,6 +62,8 @@ qt_add_qml_module(omapdf
     src/app/AnnotStore.cpp
     src/app/PageWarmup.h
     src/app/PageWarmup.cpp
+    src/selection/TextSelectionModel.h
+    src/selection/TextSelectionModel.cpp
   QML_FILES
     qml/Main.qml
     qml/chrome/TabStrip.qml
@@ -87,6 +90,7 @@ qt_add_qml_module(omapdf
 target_include_directories(omapdf PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src
   ${CMAKE_CURRENT_SOURCE_DIR}/src/app
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/selection
 )
 target_link_libraries(omapdf PRIVATE omapdf_core Qt6::QuickControls2 Qt6::Qml)
 
@@ -148,6 +152,11 @@ add_test(NAME app_controller COMMAND omapdf_app_controller_test)
 qt_add_executable(omapdf_session_test tests/test_session_store.cpp)
 target_link_libraries(omapdf_session_test PRIVATE omapdf_core Qt6::Test)
 add_test(NAME session_store COMMAND omapdf_session_test)
+
+qt_add_executable(omapdf_text_selection_test tests/test_text_selection.cpp)
+target_link_libraries(omapdf_text_selection_test PRIVATE omapdf_core Qt6::Test Qt6::Gui)
+target_compile_options(omapdf_text_selection_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME text_selection COMMAND omapdf_text_selection_test)
 
 
 qt_add_executable(omapdf_viewer_page_image_test tests/test_viewer_page_image.cpp)

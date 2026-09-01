@@ -24,6 +24,13 @@ cmake --build build
 ./build/omapdf [files...]
 ```
 
+Or use the helpers:
+
+```bash
+./scripts/build_and_test.sh
+./scripts/install.sh
+```
+
 Several files open as tabs in one window. Each new process is a new window.
 
 ### Debug and tests
@@ -79,7 +86,7 @@ Keyboard reference and power features: **[docs/usage.md](docs/usage.md)**.
 
 ## Version
 
-Current release: **0.2.2**. See [CHANGELOG.md](CHANGELOG.md).
+Current release: **0.2.3**. See [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

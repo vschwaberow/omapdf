@@ -18,6 +18,8 @@ Item {
     property bool dirty: annotStore.dirty
     property alias currentPage: view.currentPage
     readonly property real renderScale: view.renderScale
+    readonly property string selectedText: view.selectedText
+    readonly property bool hasSelection: view.selectedText.length > 0
     property int pendingRestorePage: -1
     property real pendingRestoreZoom: 0
     property real pendingRestoreScrollY: 0
@@ -178,12 +180,16 @@ Item {
         view.setContentY(Math.max(0, Math.min(maxY, view.contentY + direction * page)))
     }
     function copySelection() {
-        if (view.copySelectionToClipboard())
+        if (!view.selectedText.length) {
+            root.status(qsTr("No text selected"))
             return
-        if (view.selectedText.length) {
-            app.copyText(view.selectedText)
-            root.status(qsTr("Copied"))
         }
+        if (view.copySelectionToClipboard()) {
+            root.status(qsTr("Copied"))
+            return
+        }
+        app.copyText(view.selectedText)
+        root.status(qsTr("Copied"))
     }
     function selectAll() { view.selectAll() }
 
@@ -219,8 +225,20 @@ Item {
             root.status(qsTr("Select text to highlight"))
             return
         }
-        annotStore.addHighlight(cap.page, cap.text, cap.geometry)
-        root.status(qsTr("Highlight added"))
+        const parts = Array.isArray(cap) ? cap : [cap]
+        let n = 0
+        for (let i = 0; i < parts.length; ++i) {
+            const part = parts[i]
+            if (!part || !part.geometry || part.geometry.length === 0)
+                continue
+            annotStore.addHighlight(part.page, part.text, part.geometry)
+            n++
+        }
+        if (!n) {
+            root.status(qsTr("Select text to highlight"))
+            return
+        }
+        root.status(n > 1 ? qsTr("Highlights added") : qsTr("Highlight added"))
     }
     function beginNote() {
         notePopup.page = view.lastTapPage >= 0 ? view.lastTapPage : view.currentPage

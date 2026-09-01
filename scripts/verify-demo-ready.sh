@@ -18,8 +18,8 @@ need "$root/scripts/verify-l1-beauty.sh"
 "$root/scripts/verify-l1-beauty.sh" || fail=1
 ver="$("$root/build/omapdf" --version 2>/dev/null || true)"
 echo "version: $ver"
-if [[ "$ver" != *0.2.2* ]]; then
-  echo "EXPECTED omapdf 0.2.2"
+if [[ "$ver" != *0.2.3* ]]; then
+  echo "EXPECTED omapdf 0.2.3"
   fail=1
 fi
 exit "$fail"

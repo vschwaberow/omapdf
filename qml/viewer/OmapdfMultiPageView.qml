@@ -46,15 +46,22 @@ Item {
 
         The selected text.
     */
-    property string selectedText
     property var annotStore: null
-    property int selectionPage: -1
     property var searchHitPages: ({})
-    property var selectionGeometry: []
     property int lastTapPage: -1
     readonly property bool viewMoving: tableView.moving
     property real lastTapX: 0
     property real lastTapY: 0
+    property int selectionDragAnchorPage: -1
+    property point selectionDragAnchorPoint: Qt.point(0, 0)
+
+    readonly property alias selectedText: textSelection.selectedText
+    readonly property alias selectionPage: textSelection.selectionPage
+    readonly property alias selectionGeometry: textSelection.selectionGeometry
+    readonly property alias selectionSpanPages: textSelection.spanPages
+    readonly property alias selectionSpanActive: textSelection.spanActive
+    readonly property alias selectionAnchorValid: textSelection.anchorValid
+    readonly property alias selectionAnchorPage: textSelection.anchorPage
 
     signal copySucceeded()
 
@@ -65,15 +72,71 @@ Item {
     }
 
     function captureSelection() {
-        if (!root.selectedText.length || root.selectionPage < 0)
-            return null
-        if (!root.selectionGeometry || root.selectionGeometry.length === 0)
-            return null
-        return {
-            page: root.selectionPage,
-            text: root.selectedText,
-            geometry: root.selectionGeometry
+        const cap = textSelection.captureForHighlight()
+        return (cap === undefined || cap === null) ? null : cap
+    }
+
+    function clearSelection() {
+        const keys = Object.keys(textSelection.spanPages)
+        for (let i = 0; i < keys.length; ++i)
+            pageItem(parseInt(keys[i]))?.selection?.clear()
+        textSelection.clear()
+    }
+
+    function nearestLoadedPage(viewY) {
+        const n = tableView.rows
+        if (n <= 0)
+            return -1
+        let best = -1
+        let bestDist = Number.POSITIVE_INFINITY
+        for (let i = 0; i < n; ++i) {
+            const item = pageItem(i)
+            if (!item)
+                continue
+            const top = item.y
+            const bot = item.y + item.height
+            let dist = 0
+            if (viewY < top)
+                dist = top - viewY
+            else if (viewY > bot)
+                dist = viewY - bot
+            if (dist < bestDist) {
+                bestDist = dist
+                best = i
+            }
         }
+        return best
+    }
+
+    function resolveFocusFromView(viewX, viewY, fallbackPage, fallbackPt) {
+        const cell = tableView.cellAtPos(viewX, viewY)
+        let focusPage = cell.y >= 0 ? cell.y : root.nearestLoadedPage(viewY)
+        if (focusPage < 0)
+            focusPage = fallbackPage
+        const holder = pageItem(focusPage)
+        if (!holder)
+            return { page: fallbackPage, point: fallbackPt }
+        const paperPt = holder.viewToPaperPoint(viewX, viewY)
+        const pagePt = holder.paperToPagePoint(paperPt.x, paperPt.y)
+        return { page: focusPage, point: pagePt }
+    }
+
+    function applyDragSelection(paperItem, localPos) {
+        const viewPt = paperItem.mapToItem(tableView, localPos.x, localPos.y)
+        const margin = 48
+        let dy = 0
+        if (viewPt.y < margin)
+            dy = -Math.max(6, (margin - viewPt.y) * 0.45)
+        else if (viewPt.y > tableView.height - margin)
+            dy = Math.max(6, (viewPt.y - (tableView.height - margin)) * 0.45)
+        if (dy !== 0) {
+            const maxY = Math.max(0, tableView.contentHeight - tableView.height)
+            tableView.contentY = Math.max(0, Math.min(maxY, tableView.contentY + dy))
+        }
+        const focus = root.resolveFocusFromView(viewPt.x, viewPt.y,
+                                                root.selectionDragAnchorPage,
+                                                root.selectionDragAnchorPoint)
+        textSelection.updateTo(focus.page, focus.point.x, focus.point.y)
     }
 
     function annotFill(hex) {
@@ -93,10 +156,13 @@ Item {
         \sa copySelectionToClipboard()
     */
     function selectAll() {
-        const item = pageItem(pageNavigator.currentPage)
-            ?? tableView.itemAtCell(tableView.cellAtPos(root.width / 2, root.height / 2))
-        const pdfSelection = item?.selection as PdfSelection
-        pdfSelection?.selectAll()
+        const page = pageNavigator.currentPage
+        if (page < 0)
+            return
+        if (!textSelection.selectAllOnPage(page))
+            return
+        if (root.selectedText.length)
+            app.copyTextToSelection(root.selectedText)
     }
 
     /*!
@@ -108,20 +174,11 @@ Item {
         \sa selectAll()
     */
     function copySelectionToClipboard() {
-        const item = pageItem(root.selectionPage)
-            ?? tableView.itemAtCell(tableView.cellAtPos(root.width / 2, root.height / 2))
-        const pdfSelection = item?.selection as PdfSelection
-        if (pdfSelection && pdfSelection.text && pdfSelection.text.length) {
-            pdfSelection.copyToClipboard()
-            root.copySucceeded()
-            return true
-        }
-        if (root.selectedText.length) {
-            app.copyText(root.selectedText)
-            root.copySucceeded()
-            return true
-        }
-        return false
+        if (!root.selectedText.length)
+            return false
+        app.copyText(root.selectedText)
+        root.copySucceeded()
+        return true
     }
 
     // --------------------------------
@@ -343,7 +400,11 @@ Item {
         \l{PdfSearchModel::currentResult}{searchModel's current result}
         so that the view will jump to the previous search result.
     */
-    function searchBack() { --searchModel.currentResult }
+    function searchBack() {
+        if (searchModel.rowCount() <= 0)
+            return
+        searchModel.currentResult = Math.max(0, searchModel.currentResult - 1)
+    }
 
     /*!
         \qmlmethod void PdfMultiPageView::searchForward()
@@ -352,7 +413,11 @@ Item {
         \l{PdfSearchModel::currentResult}{searchModel's current result}
         so that the view will jump to the next search result.
     */
-    function searchForward() { ++searchModel.currentResult }
+    function searchForward() {
+        if (searchModel.rowCount() <= 0)
+            return
+        searchModel.currentResult = Math.min(searchModel.rowCount() - 1, searchModel.currentResult + 1)
+    }
 
     LoggingCategory {
         id: lcMPV
@@ -361,6 +426,11 @@ Item {
 
     id: root
     PdfStyle { id: style }
+    TextSelectionModel {
+        id: textSelection
+        document: root.document
+        renderScale: root.renderScale
+    }
     TableView {
         id: tableView
         property bool debug: false
@@ -452,6 +522,14 @@ Item {
                                      image.width.toFixed(1) + "x" + image.height.toFixed(1)
             }
             property alias selection: selection
+            property alias paper: paper
+            function viewToPaperPoint(viewX, viewY) {
+                const onHolder = pageHolder.mapFromItem(tableView, viewX, viewY)
+                return paper.mapFromItem(pageHolder, onHolder.x, onHolder.y)
+            }
+            function paperToPagePoint(paperX, paperY) {
+                return Qt.point(paperX / paper.pageScale, paperY / paper.pageScale)
+            }
             Rectangle {
                 id: paper
                 width: image.width
@@ -459,7 +537,9 @@ Item {
                 rotation: root.pageRotation
                 anchors.centerIn: pinch.active ? undefined : parent
                 property size pagePointSize: root.document.pagePointSize(pageHolder.index)
-                property real pageScale: image.paintedWidth / pagePointSize.width
+                property real pageScale: pagePointSize.width > 0
+                                        ? image.width / pagePointSize.width
+                                        : 1
                 HoverHandler {
                     cursorShape: Qt.IBeamCursor
                 }
@@ -503,7 +583,7 @@ Item {
                 Shape {
                     anchors.fill: parent
                     visible: image.status === Image.Ready
-                             && !tableView.moving
+                             && root.selectionSpanPages[pageHolder.index] !== undefined
                              && root.selectedText.length > 0
                     ShapePath {
                         strokeWidth: -1
@@ -661,17 +741,52 @@ Item {
                                 tableView.returnToBounds()
                             }
                         }
-                    grabPermissions: PointerHandler.CanTakeOverFromAnything
+                    acceptedDevices: PointerDevice.TouchScreen
                 }
                 DragHandler {
                     id: textSelectionDrag
                     acceptedDevices: PointerDevice.Mouse | PointerDevice.Stylus
                     target: null
+                    property bool extendSelection: false
+                    grabPermissions: PointerHandler.CanTakeOverFromItems
+                                     | PointerHandler.ApprovesTakeOverByAnything
                     onActiveChanged: {
-                        if (active)
+                        if (active) {
+                            singleClickClear.stop()
+                            extendSelection = (centroid.modifiers & Qt.ShiftModifier)
+                                              && root.selectionAnchorValid
+                            const pressPt = Qt.point(centroid.pressPosition.x / paper.pageScale,
+                                                     centroid.pressPosition.y / paper.pageScale)
+                            if (!extendSelection) {
+                                root.clearSelection()
+                                textSelection.setAnchorSnapped(pageHolder.index, pressPt.x, pressPt.y)
+                            }
+                            root.selectionDragAnchorPage = textSelection.anchorPage
+                            root.selectionDragAnchorPoint = textSelection.anchorPoint
+                            textSelection.updateTo(pageHolder.index, pressPt.x, pressPt.y)
+                            selectAutoScroll.restart()
                             return
-                        if (selection.text.length)
-                            app.copyTextToSelection(selection.text)
+                        }
+                        selectAutoScroll.stop()
+                        if (root.selectedText.length)
+                            app.copyTextToSelection(root.selectedText)
+                    }
+                    onCentroidChanged: {
+                        if (!active)
+                            return
+                        root.applyDragSelection(paper, centroid.position)
+                    }
+                }
+                Timer {
+                    id: selectAutoScroll
+                    interval: 16
+                    repeat: true
+                    onTriggered: {
+                        if (!textSelectionDrag.active) {
+                            stop()
+                            return
+                        }
+                        root.applyDragSelection(paper, textSelectionDrag.centroid.position)
                     }
                 }
                 TapHandler {
@@ -681,6 +796,24 @@ Item {
                         root.lastTapPage = pageHolder.index
                         root.lastTapX = eventPoint.position.x / paper.pageScale
                         root.lastTapY = eventPoint.position.y / paper.pageScale
+                        const px = eventPoint.position.x / paper.pageScale
+                        const py = eventPoint.position.y / paper.pageScale
+                        if (eventPoint.modifiers & Qt.ShiftModifier) {
+                            singleClickClear.stop()
+                            textSelection.updateTo(pageHolder.index, px, py)
+                            return
+                        }
+                        if (tapCount >= 3) {
+                            singleClickClear.stop()
+                            textSelection.selectLineAt(pageHolder.index, px, py)
+                            return
+                        }
+                        if (tapCount === 2) {
+                            singleClickClear.stop()
+                            textSelection.selectWordAt(pageHolder.index, px, py)
+                            return
+                        }
+                        singleClickClear.restart()
                     }
                 }
                 TapHandler {
@@ -698,7 +831,7 @@ Item {
                         root.lastTapPage = pageHolder.index
                         root.lastTapX = eventPoint.position.x / paper.pageScale
                         root.lastTapY = eventPoint.position.y / paper.pageScale
-                        selection.clear()
+                        root.clearSelection()
                         selection.forceActiveFocus()
                     }
                 }
@@ -728,18 +861,15 @@ Item {
                     id: selection
                     anchors.fill: parent
                     document: root.document
-                    page: image.currentFrame
-                    renderScale: image.renderScale
-                    from: textSelectionDrag.centroid.pressPosition
-                    to: textSelectionDrag.centroid.position
-                    hold: !textSelectionDrag.active && !mouseClickHandler.pressed
-                    onTextChanged: {
-                        root.selectedText = text
-                        root.selectionPage = page
-                        root.selectionGeometry = geometry
-                        if (text.length && !textSelectionDrag.active)
-                            app.copyTextToSelection(text)
-                    }
+                    page: pageHolder.index
+                    renderScale: root.renderScale
+                    from: root.selectionSpanPages[pageHolder.index]
+                          ? root.selectionSpanPages[pageHolder.index].fromPt
+                          : Qt.point(0, 0)
+                    to: root.selectionSpanPages[pageHolder.index]
+                        ? root.selectionSpanPages[pageHolder.index].toPt
+                        : Qt.point(0, 0)
+                    hold: true
                     focus: true
                 }
             }
@@ -855,14 +985,28 @@ Item {
     PdfSearchModel {
         id: searchModel
         document: root.document === undefined ? null : root.document
-        onCurrentResultChanged: pageNavigator.jump(currentResultLink)
+        onCurrentResultChanged: {
+            if (currentResult < 0 || rowCount() <= 0 || currentResult >= rowCount())
+                return
+            pageNavigator.jump(currentResultLink)
+        }
         onSearchStringChanged: root.rebuildSearchHitPages()
     }
     Connections {
         target: searchModel
-        function onModelReset() { root.rebuildSearchHitPages() }
+        function onModelReset() {
+            root.rebuildSearchHitPages()
+            if (searchModel.rowCount() === 0 && searchModel.currentResult >= 0)
+                searchModel.currentResult = -1
+        }
         function onRowsInserted() { root.rebuildSearchHitPages() }
         function onRowsRemoved() { root.rebuildSearchHitPages() }
+    }
+
+    Timer {
+        id: singleClickClear
+        interval: 250
+        onTriggered: root.clearSelection()
     }
 
     Menu {
@@ -871,6 +1015,10 @@ Item {
             text: qsTr("Copy")
             enabled: root.selectedText.length > 0
             onTriggered: root.copySelectionToClipboard()
+        }
+        MenuItem {
+            text: qsTr("Select All")
+            onTriggered: root.selectAll()
         }
     }
 }

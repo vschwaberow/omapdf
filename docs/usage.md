@@ -52,14 +52,27 @@ Hit counter shows `i/n` in the search bar. No hit-list rail.
 
 ## Reader parity
 
-| Action | Keys |
+| Action | Keys / chrome |
 |--------|------|
-| Copy selection | Ctrl+C, right-click Copy |
-| Select all (page text) | Ctrl+A |
+| Copy selection | Ctrl+C, right-click Copy, tool rail ⎘ |
+| Select all (page text) | Ctrl+A, tool rail ⊞ |
+| Highlight selection | `h`, tool rail ▮ |
 | Print | Ctrl+P (system dialog) |
 | External link | Confirm dialog, then open |
 
-Selecting text also fills the Linux primary selection (middle-click paste).
+Mouse and stylus selection follows common PDF reader habits (Acrobat-style):
+
+| Gesture | Action |
+|---------|--------|
+| Click | Clear selection |
+| Click-drag | Select text (word-snap; across pages) |
+| Double-click | Select word |
+| Triple-click | Select line |
+| Shift+click or Shift+drag | Extend from anchor (across pages) |
+| Ctrl+C / Copy | Clipboard |
+| Ctrl+A / Select All | All text on current page |
+
+Drag across page breaks selects every page in between (Acrobat-style). Dragging near the viewport edge auto-scrolls with speed based on distance. Highlight (`h`) applies to every page in a multi-page selection. Touch pinch is zoom-only. Selecting also fills the Linux primary selection (middle-click paste). Image-only / scanned pages have no text layer — search (`/`) shows whether text is available.
 
 Password-protected PDFs prompt on open; cancel closes the tab. Wrong password retries with an error.
 
@@ -100,3 +113,12 @@ Shortcuts that mutate structure are disabled while an async structure/export job
 |------|----------|
 | `~/.local/state/omapdf/` | Session state, prefs, recents |
 | `~/.local/state/omapdf/annots/` | Sidecar annotation JSON |
+
+
+## Build helpers
+
+| Script | Purpose |
+|--------|---------|
+| `./scripts/build_and_test.sh` | Debug configure, build, and run all ctests (headless) |
+| `./scripts/install.sh` | Release build and install to `~/.local` |
+| `./scripts/set-default-pdf-handler.sh` | Register as default PDF app |
