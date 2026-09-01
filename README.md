@@ -79,7 +79,7 @@ Keyboard reference and power features: **[docs/usage.md](docs/usage.md)**.
 
 ## Version
 
-Current release: **0.2.1**. See [CHANGELOG.md](CHANGELOG.md).
+Current release: **0.2.2**. See [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

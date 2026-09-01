@@ -7,20 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- Soft zoom: layout follows immediately; PdfPageImage sourceSize sharpens after 120 ms idle; wheel debounce 80 ms
-
-### Fixed
-
-- Disk/structure reload restores `contentY` with zoom and page (less scroll jump)
-
-### Added
-
-- `scripts/verify-l1-beauty.sh` and `scripts/verify-demo-ready.sh`
-- `docs/demo-script.md` launch recording outline
-- Reading gate cold first-page ink budget (500 ms)
-
 ## [0.2.2] - 2026-09-01
 
 ### Fixed
@@ -28,11 +14,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Restore Qt `PdfPageImage` for page display (drop custom `PageTileLayer` from the viewer and binary)
 - RAII connections and QPointer guards around PDF warmup document bindings
 - Shutdown no longer segfaults when `QPdfDocument` closes under `PageWarmup`
+- Disk/structure reload restores `contentY` with zoom and page
 - Reading gate measures full-page rasters matching the viewer sourceSize contract
+- Harden commit-msg stripping for `Made with [Cursor](...)` markdown footers
 
 ### Changed
 
+- Soft zoom: layout follows immediately; PdfPageImage sourceSize sharpens after 120 ms idle; wheel debounce 80 ms
 - Remove unused page-tile hub/layer sources from the shipped app
+
+### Added
+
+- `scripts/verify-l1-beauty.sh` and `scripts/verify-demo-ready.sh`
+- `docs/demo-script.md` launch recording outline
+- Reading gate cold first-page ink budget (500 ms)
+- `viewer_page_image` and `l1_beauty` ctests
 
 ## [0.2.1] - 2026-08-31
 
