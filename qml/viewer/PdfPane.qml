@@ -225,8 +225,20 @@ Item {
             root.status(qsTr("Select text to highlight"))
             return
         }
-        annotStore.addHighlight(cap.page, cap.text, cap.geometry)
-        root.status(qsTr("Highlight added"))
+        const parts = Array.isArray(cap) ? cap : [cap]
+        let n = 0
+        for (let i = 0; i < parts.length; ++i) {
+            const part = parts[i]
+            if (!part || !part.geometry || part.geometry.length === 0)
+                continue
+            annotStore.addHighlight(part.page, part.text, part.geometry)
+            n++
+        }
+        if (!n) {
+            root.status(qsTr("Select text to highlight"))
+            return
+        }
+        root.status(n > 1 ? qsTr("Highlights added") : qsTr("Highlight added"))
     }
     function beginNote() {
         notePopup.page = view.lastTapPage >= 0 ? view.lastTapPage : view.currentPage
