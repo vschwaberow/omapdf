@@ -113,3 +113,12 @@ Shortcuts that mutate structure are disabled while an async structure/export job
 |------|----------|
 | `~/.local/state/omapdf/` | Session state, prefs, recents |
 | `~/.local/state/omapdf/annots/` | Sidecar annotation JSON |
+
+
+## Build helpers
+
+| Script | Purpose |
+|--------|---------|
+| `./scripts/build_and_test.sh` | Debug configure, build, and run all ctests (headless) |
+| `./scripts/install.sh` | Release build and install to `~/.local` |
+| `./scripts/set-default-pdf-handler.sh` | Register as default PDF app |
