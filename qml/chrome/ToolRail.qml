@@ -18,6 +18,7 @@ Rectangle {
     readonly property real zoomScale: pane ? pane.renderScale : 1
     property int zoomPercentShown: Math.round(zoomScale * 100)
     readonly property bool paneDimmed: pane ? pane.dimmed : false
+    readonly property bool hasSelection: pane ? pane.hasSelection : false
 
     Timer {
         id: zoomPercentDebounce
@@ -106,6 +107,45 @@ Rectangle {
             onClicked: {
                 if (root.pane)
                     root.pane.fitPage()
+            }
+        }
+
+
+        Item {
+            Layout.preferredHeight: theme.spaceMd
+            Layout.fillWidth: true
+        }
+
+        RailButton {
+            Layout.alignment: Qt.AlignHCenter
+            glyph: "⎘"
+            hint: qsTr("Copy selection (Ctrl+C)")
+            enabled: root.pane !== null && root.hasSelection
+            onClicked: {
+                if (root.pane)
+                    root.pane.copySelection()
+            }
+        }
+
+        RailButton {
+            Layout.alignment: Qt.AlignHCenter
+            glyph: "⊞"
+            hint: qsTr("Select all on page (Ctrl+A)")
+            enabled: root.pane !== null
+            onClicked: {
+                if (root.pane)
+                    root.pane.selectAll()
+            }
+        }
+
+        RailButton {
+            Layout.alignment: Qt.AlignHCenter
+            glyph: "▮"
+            hint: qsTr("Highlight selection (h)")
+            enabled: root.pane !== null && root.hasSelection
+            onClicked: {
+                if (root.pane)
+                    root.pane.highlightSelection()
             }
         }
 

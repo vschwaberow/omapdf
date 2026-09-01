@@ -459,7 +459,9 @@ Item {
                 rotation: root.pageRotation
                 anchors.centerIn: pinch.active ? undefined : parent
                 property size pagePointSize: root.document.pagePointSize(pageHolder.index)
-                property real pageScale: image.paintedWidth / pagePointSize.width
+                property real pageScale: pagePointSize.width > 0
+                                        ? image.width / pagePointSize.width
+                                        : 1
                 HoverHandler {
                     cursorShape: Qt.IBeamCursor
                 }
@@ -503,8 +505,8 @@ Item {
                 Shape {
                     anchors.fill: parent
                     visible: image.status === Image.Ready
-                             && !tableView.moving
                              && root.selectedText.length > 0
+                             && (!tableView.moving || textSelectionDrag.active)
                     ShapePath {
                         strokeWidth: -1
                         fillColor: style.selectionColor
@@ -661,12 +663,14 @@ Item {
                                 tableView.returnToBounds()
                             }
                         }
-                    grabPermissions: PointerHandler.CanTakeOverFromAnything
+                    acceptedDevices: PointerDevice.TouchScreen
                 }
                 DragHandler {
                     id: textSelectionDrag
                     acceptedDevices: PointerDevice.Mouse | PointerDevice.Stylus
                     target: null
+                    grabPermissions: PointerHandler.CanTakeOverFromItems
+                                     | PointerHandler.ApprovesTakeOverByAnything
                     onActiveChanged: {
                         if (active)
                             return
@@ -728,8 +732,8 @@ Item {
                     id: selection
                     anchors.fill: parent
                     document: root.document
-                    page: image.currentFrame
-                    renderScale: image.renderScale
+                    page: pageHolder.index
+                    renderScale: root.renderScale
                     from: textSelectionDrag.centroid.pressPosition
                     to: textSelectionDrag.centroid.position
                     hold: !textSelectionDrag.active && !mouseClickHandler.pressed

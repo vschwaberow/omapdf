@@ -18,6 +18,8 @@ Item {
     property bool dirty: annotStore.dirty
     property alias currentPage: view.currentPage
     readonly property real renderScale: view.renderScale
+    readonly property string selectedText: view.selectedText
+    readonly property bool hasSelection: view.selectedText.length > 0
     property int pendingRestorePage: -1
     property real pendingRestoreZoom: 0
     property real pendingRestoreScrollY: 0
@@ -178,12 +180,16 @@ Item {
         view.setContentY(Math.max(0, Math.min(maxY, view.contentY + direction * page)))
     }
     function copySelection() {
-        if (view.copySelectionToClipboard())
+        if (!view.selectedText.length) {
+            root.status(qsTr("No text selected"))
             return
-        if (view.selectedText.length) {
-            app.copyText(view.selectedText)
-            root.status(qsTr("Copied"))
         }
+        if (view.copySelectionToClipboard()) {
+            root.status(qsTr("Copied"))
+            return
+        }
+        app.copyText(view.selectedText)
+        root.status(qsTr("Copied"))
     }
     function selectAll() { view.selectAll() }
 

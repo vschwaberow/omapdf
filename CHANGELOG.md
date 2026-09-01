@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Mouse text selection no longer loses the grab to pinch / flick; selection highlight stays during drag
+- PdfSelection maps with page index and renderScale from the page holder
+
+### Changed
+
+- Pinch zoom accepts touch only so mouse/stylus can select text
+
+### Added
+
+- Tool rail buttons for copy selection, select-all (page), and highlight
+
 ## [0.2.2] - 2026-09-01
 
 ### Fixed

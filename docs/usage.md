@@ -52,14 +52,15 @@ Hit counter shows `i/n` in the search bar. No hit-list rail.
 
 ## Reader parity
 
-| Action | Keys |
+| Action | Keys / chrome |
 |--------|------|
-| Copy selection | Ctrl+C, right-click Copy |
-| Select all (page text) | Ctrl+A |
+| Copy selection | Ctrl+C, right-click Copy, tool rail ⎘ |
+| Select all (page text) | Ctrl+A, tool rail ⊞ |
+| Highlight selection | `h`, tool rail ▮ |
 | Print | Ctrl+P (system dialog) |
 | External link | Confirm dialog, then open |
 
-Selecting text also fills the Linux primary selection (middle-click paste).
+Drag with the mouse or stylus to select text (touch pinch is zoom-only). Selecting also fills the Linux primary selection (middle-click paste). Image-only / scanned pages have no text layer — search (`/`) shows whether text is available.
 
 Password-protected PDFs prompt on open; cancel closes the tab. Wrong password retries with an error.
 
