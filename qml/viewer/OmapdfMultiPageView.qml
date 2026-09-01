@@ -400,7 +400,11 @@ Item {
         \l{PdfSearchModel::currentResult}{searchModel's current result}
         so that the view will jump to the previous search result.
     */
-    function searchBack() { --searchModel.currentResult }
+    function searchBack() {
+        if (searchModel.rowCount() <= 0)
+            return
+        searchModel.currentResult = Math.max(0, searchModel.currentResult - 1)
+    }
 
     /*!
         \qmlmethod void PdfMultiPageView::searchForward()
@@ -409,7 +413,11 @@ Item {
         \l{PdfSearchModel::currentResult}{searchModel's current result}
         so that the view will jump to the next search result.
     */
-    function searchForward() { ++searchModel.currentResult }
+    function searchForward() {
+        if (searchModel.rowCount() <= 0)
+            return
+        searchModel.currentResult = Math.min(searchModel.rowCount() - 1, searchModel.currentResult + 1)
+    }
 
     LoggingCategory {
         id: lcMPV
@@ -977,12 +985,20 @@ Item {
     PdfSearchModel {
         id: searchModel
         document: root.document === undefined ? null : root.document
-        onCurrentResultChanged: pageNavigator.jump(currentResultLink)
+        onCurrentResultChanged: {
+            if (currentResult < 0 || rowCount() <= 0 || currentResult >= rowCount())
+                return
+            pageNavigator.jump(currentResultLink)
+        }
         onSearchStringChanged: root.rebuildSearchHitPages()
     }
     Connections {
         target: searchModel
-        function onModelReset() { root.rebuildSearchHitPages() }
+        function onModelReset() {
+            root.rebuildSearchHitPages()
+            if (searchModel.rowCount() === 0 && searchModel.currentResult >= 0)
+                searchModel.currentResult = -1
+        }
         function onRowsInserted() { root.rebuildSearchHitPages() }
         function onRowsRemoved() { root.rebuildSearchHitPages() }
     }
