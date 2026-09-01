@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(omapdf VERSION 0.2.1 LANGUAGES CXX)
+project(omapdf VERSION 0.2.2 LANGUAGES CXX)
 
 configure_file(
   ${CMAKE_SOURCE_DIR}/src/version.h.in

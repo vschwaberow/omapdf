@@ -7,11 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-09-01
+
 ### Fixed
 
-- Restore Qt `PdfPageImage` for page display (custom `PageTileLayer` no longer drives the viewer)
-- RAII connections and QPointer guards around PDF tile/warmup bindings
-- Shutdown no longer segfaults when `QPdfDocument` closes under `PageWarmup`/`PageTileLayer`
+- Restore Qt `PdfPageImage` for page display (drop custom `PageTileLayer` from the viewer and binary)
+- RAII connections and QPointer guards around PDF warmup document bindings
+- Shutdown no longer segfaults when `QPdfDocument` closes under `PageWarmup`
+- Reading gate measures full-page rasters matching the viewer sourceSize contract
+
+### Changed
+
+- Remove unused page-tile hub/layer sources from the shipped app
 
 ## [0.2.1] - 2026-08-31
 
@@ -70,7 +77,8 @@ First release.
 
 - Startup failure on Qt 6.11: `TableView` has no `cacheBuffer` property
 
-[Unreleased]: https://github.com/vschwaberow/omapdf/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/vschwaberow/omapdf/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/vschwaberow/omapdf/releases/tag/v0.2.2
 [0.2.1]: https://github.com/vschwaberow/omapdf/releases/tag/v0.2.1
 [0.2.0]: https://github.com/vschwaberow/omapdf/releases/tag/v0.2.0
 [0.1.0]: https://github.com/vschwaberow/omapdf/releases/tag/v0.1.0
