@@ -57,7 +57,7 @@ src/
     LinkGuard                external link confirmation
     LocaleTranslator         qsTr fallback from JSON
     DocumentLimits           max pages / file size guards
-  selection/               text selection domain (PdfTextSource port)
+  selection/               text selection domain (PdfTextSource, TextSelectionModel)
 qml/
   Main.qml                   ApplicationWindow, shortcuts, SplitView
   chrome/                    TabStrip, SearchBar, ToolRail, dialogs, buttons

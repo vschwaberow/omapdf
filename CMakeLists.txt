@@ -62,6 +62,8 @@ qt_add_qml_module(omapdf
     src/app/AnnotStore.cpp
     src/app/PageWarmup.h
     src/app/PageWarmup.cpp
+    src/selection/TextSelectionModel.h
+    src/selection/TextSelectionModel.cpp
   QML_FILES
     qml/Main.qml
     qml/chrome/TabStrip.qml
@@ -88,6 +90,7 @@ qt_add_qml_module(omapdf
 target_include_directories(omapdf PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src
   ${CMAKE_CURRENT_SOURCE_DIR}/src/app
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/selection
 )
 target_link_libraries(omapdf PRIVATE omapdf_core Qt6::QuickControls2 Qt6::Qml)
 
