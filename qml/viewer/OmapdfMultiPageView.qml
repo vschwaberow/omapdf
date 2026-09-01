@@ -463,24 +463,26 @@ Item {
                 HoverHandler {
                     cursorShape: Qt.IBeamCursor
                 }
-                PageTileLayer {
+                PdfPageImage {
                     id: image
                     document: root.document
-                    page: pageHolder.index
-                    renderScale: root.renderScale
+                    currentFrame: pageHolder.index
+                    asynchronous: true
+                    fillMode: Image.PreserveAspectFit
                     width: paper.pagePointSize.width * root.renderScale
                     height: paper.pagePointSize.height * root.renderScale
-                    devicePixelRatio: Screen.devicePixelRatio
-                    visibleRect: {
-                        void tableView.contentX
-                        void tableView.contentY
-                        void tableView.width
-                        void tableView.height
-                        const tl = mapFromItem(tableView, 0, 0)
-                        const br = mapFromItem(tableView, tableView.width, tableView.height)
-                        return Qt.rect(tl.x, tl.y, br.x - tl.x, br.y - tl.y)
+                    property real renderScale: root.renderScale
+                    function applySourceSize() {
+                        let w = paper.pagePointSize.width * renderScale * Screen.devicePixelRatio
+                        const maxEdge = 4096
+                        if (w > maxEdge)
+                            w = maxEdge
+                        image.sourceSize.width = w
+                        image.sourceSize.height = 0
                     }
+                    Component.onCompleted: applySourceSize()
                     onRenderScaleChanged: {
+                        applySourceSize()
                         paper.scale = 1
                         if (!pinch.active && !tableView.moving)
                             searchHighlights.update()

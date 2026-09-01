@@ -158,6 +158,11 @@ target_link_libraries(omapdf_page_tile_geometry_test PRIVATE Qt6::Test Qt6::Gui)
 target_include_directories(omapdf_page_tile_geometry_test PRIVATE src)
 add_test(NAME page_tile_geometry COMMAND omapdf_page_tile_geometry_test)
 
+qt_add_executable(omapdf_viewer_page_image_test tests/test_viewer_page_image.cpp)
+target_link_libraries(omapdf_viewer_page_image_test PRIVATE Qt6::Test)
+target_compile_definitions(omapdf_viewer_page_image_test PRIVATE OMAPDF_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME viewer_page_image COMMAND omapdf_viewer_page_image_test)
+
 
 
 
