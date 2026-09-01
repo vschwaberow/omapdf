@@ -35,6 +35,7 @@ add_library(omapdf_core STATIC
   src/app/LinkGuard.cpp
   src/app/StructureEngine.cpp
   src/app/LocaleTranslator.cpp
+  src/selection/Algorithms.cpp
 )
 target_include_directories(omapdf_core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -148,6 +149,11 @@ add_test(NAME app_controller COMMAND omapdf_app_controller_test)
 qt_add_executable(omapdf_session_test tests/test_session_store.cpp)
 target_link_libraries(omapdf_session_test PRIVATE omapdf_core Qt6::Test)
 add_test(NAME session_store COMMAND omapdf_session_test)
+
+qt_add_executable(omapdf_text_selection_test tests/test_text_selection.cpp)
+target_link_libraries(omapdf_text_selection_test PRIVATE omapdf_core Qt6::Test Qt6::Gui)
+target_compile_options(omapdf_text_selection_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME text_selection COMMAND omapdf_text_selection_test)
 
 
 qt_add_executable(omapdf_viewer_page_image_test tests/test_viewer_page_image.cpp)

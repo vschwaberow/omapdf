@@ -57,6 +57,7 @@ src/
     LinkGuard                external link confirmation
     LocaleTranslator         qsTr fallback from JSON
     DocumentLimits           max pages / file size guards
+  selection/               text selection domain (PdfTextSource port)
 qml/
   Main.qml                   ApplicationWindow, shortcuts, SplitView
   chrome/                    TabStrip, SearchBar, ToolRail, dialogs, buttons
@@ -87,7 +88,7 @@ Runtime state directory: `~/.local/state/omapdf/` (session JSON, annot sidecars)
 - Tests: `ctest --test-dir build-debug --output-on-failure`
 - Clang-tidy: `cmake -B build-tidy -G Ninja -DCMAKE_BUILD_TYPE=Debug -DOMAPDF_CLANG_TIDY=ON && cmake --build build-tidy`
 
-CTest targets: `theme_bridge`, `annot_store`, `structure_engine`, `flatten_export`, `locale_translator`, `reading_gate`, `app_controller`, `session_store`.
+CTest targets: `theme_bridge`, `annot_store`, `structure_engine`, `flatten_export`, `locale_translator`, `reading_gate`, `app_controller`, `session_store`, `text_selection`.
 
 ## Constraints
 
