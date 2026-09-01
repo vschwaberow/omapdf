@@ -17,7 +17,7 @@ Highest wins. If two rules conflict, obey the higher one and say so.
 
 - Do not run `git push` or any remote publish.
 - Do not mention AI, tools, models, or co-authors in commits, pull requests, bodies, or docs.
-- Do not leave a `Co-authored-by` trailer or a `Made with Cursor` line. Install `hooks/commit-msg` into `.git/hooks` or `core.hooksPath`.
+- Do not leave a `Co-authored-by` trailer or a `Made with Cursor` line in commits or PR bodies. Install `hooks/commit-msg` into `.git/hooks` or `core.hooksPath`. After any `gh pr create`/`edit`, strip the footer from the PR body before you stop.
 - Do not commit agent state: `.cursor/`, `.claude/`, `.codex/`, `.crush/`, `.aider*`, session logs, scratchpads.
 - Do not commit `AGENTS.local.md` or `AGENTS.md.local`.
 - Do not add comments, docstrings, or tutorial text in owned source. Names and structure carry the meaning.

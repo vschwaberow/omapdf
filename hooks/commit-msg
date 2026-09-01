@@ -1,6 +1,12 @@
 #!/bin/sh
-# Strip Cursor attribution trailers.
+# Strip Cursor attribution trailers from commit messages.
+# Long form: ~/LLM-Wiki/wiki/cursor-git-attribution.md
 msg=$1
 tmp=$1.tmp.$$
-grep -v -E '^[[:space:]]*Co-authored-by:[[:space:]]*Cursor[[:space:]].*$|^[[:space:]]*Made[- ][Ww]ith:[[:space:]]*Cursor[[:space:]]*$|^[[:space:]]*Made with Cursor[[:space:]]*$' "$msg" > "$tmp" || true
+grep -v -E \
+  -e '^[[:space:]]*Co-authored-by:[[:space:]]*Cursor[[:space:]].*$' \
+  -e '^[[:space:]]*Made[- ][Ww]ith:[[:space:]]*Cursor[[:space:]]*$' \
+  -e '^[[:space:]]*Made with Cursor[[:space:]]*$' \
+  -e '^[[:space:]]*Made with \[Cursor\]\(.*\)[[:space:]]*$' \
+  "$msg" > "$tmp" || true
 mv "$tmp" "$msg"
