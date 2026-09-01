@@ -477,13 +477,21 @@ Item {
                         const maxEdge = 4096
                         if (w > maxEdge)
                             w = maxEdge
+                        w = Math.round(w)
+                        if (image.sourceSize.width === w)
+                            return
                         image.sourceSize.width = w
                         image.sourceSize.height = 0
                     }
+                    Timer {
+                        id: sharpenZoom
+                        interval: 120
+                        onTriggered: image.applySourceSize()
+                    }
                     Component.onCompleted: applySourceSize()
                     onRenderScaleChanged: {
-                        applySourceSize()
                         paper.scale = 1
+                        sharpenZoom.restart()
                         if (!pinch.active && !tableView.moving)
                             searchHighlights.update()
                     }

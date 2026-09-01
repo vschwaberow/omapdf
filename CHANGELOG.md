@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Soft zoom: layout follows immediately; PdfPageImage sourceSize sharpens after 120 ms idle; wheel debounce 80 ms
+
 ### Fixed
 
 - Disk/structure reload restores `contentY` with zoom and page (less scroll jump)

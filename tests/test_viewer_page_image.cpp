@@ -15,6 +15,10 @@ void ViewerPageImageTest::multipageViewUsesPdfPageImage() {
   QVERIFY2(qml.contains("PdfPageImage"), "viewer must use Qt PdfPageImage");
   QVERIFY2(!qml.contains("PageTileLayer"),
            "viewer must not use custom PageTileLayer");
+  QVERIFY2(qml.contains("sharpenZoom"),
+           "viewer must defer sourceSize via idle sharpenZoom timer");
+  QVERIFY2(qml.contains("interval: 120"),
+           "idle sharpen timer must be 120 ms");
 }
 
 QTEST_APPLESS_MAIN(ViewerPageImageTest)

@@ -120,7 +120,7 @@ Item {
 
     Timer {
         id: zoomDebounce
-        interval: 40
+        interval: 80
         onTriggered: {
             view.renderScale = Math.max(0.25, Math.min(4, view.renderScale * root.pendingZoomFactor))
             root.pendingZoomFactor = 1
