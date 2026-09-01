@@ -60,10 +60,10 @@ Item {
     property real selectionAnchorItemX: 0
     property real selectionAnchorItemY: 0
     property bool selectionAnchorValid: false
-    property int selectionEditPage: -1
-    property point selectionFromPt: Qt.point(0, 0)
-    property point selectionToPt: Qt.point(0, 0)
-    property bool selectionPointsHeld: false
+    property var selectionSpanPages: ({})
+    property bool selectionSpanActive: false
+    property int selectionDragAnchorPage: -1
+    property point selectionDragAnchorPoint: Qt.point(0, 0)
 
     signal copySucceeded()
 
@@ -86,16 +86,95 @@ Item {
     }
 
 
+    function clearSpanPageSelections() {
+        const keys = Object.keys(root.selectionSpanPages)
+        for (let i = 0; i < keys.length; ++i)
+            pageItem(parseInt(keys[i]))?.selection?.clear()
+        root.selectionSpanPages = {}
+        root.selectionSpanActive = false
+    }
+
     function clearSelection() {
-        if (root.selectionPage >= 0) {
-            const prev = pageItem(root.selectionPage)
-            prev?.selection?.clear()
-        }
+        root.clearSpanPageSelections()
         root.selectedText = ""
         root.selectionPage = -1
         root.selectionGeometry = []
-        root.selectionPointsHeld = false
-        root.selectionEditPage = -1
+    }
+
+    function clampPagePoint(pageIndex, pt) {
+        const sz = root.document.pagePointSize(pageIndex)
+        return Qt.point(Math.max(0, Math.min(sz.width, pt.x)),
+                        Math.max(0, Math.min(sz.height, pt.y)))
+    }
+
+    function resolveFocusFromView(viewX, viewY, fallbackPage, fallbackPt) {
+        const cell = tableView.cellAtPos(viewX, viewY)
+        const focusPage = cell.y >= 0 ? cell.y : fallbackPage
+        const holder = pageItem(focusPage)
+        if (!holder)
+            return { page: fallbackPage, point: root.clampPagePoint(fallbackPage, fallbackPt) }
+        const paperPt = holder.viewToPaperPoint(viewX, viewY)
+        const pagePt = holder.paperToPagePoint(paperPt.x, paperPt.y)
+        return { page: focusPage, point: root.clampPagePoint(focusPage, pagePt) }
+    }
+
+    function updateSpanSelection(anchorPage, anchorPt, focusPage, focusPt) {
+        if (anchorPage < 0 || focusPage < 0 || !root.document)
+            return false
+        anchorPt = root.clampPagePoint(anchorPage, anchorPt)
+        focusPt = root.clampPagePoint(focusPage, focusPt)
+        const lo = Math.min(anchorPage, focusPage)
+        const hi = Math.max(anchorPage, focusPage)
+        const forward = anchorPage <= focusPage
+        const scale = root.renderScale
+        const oldKeys = Object.keys(root.selectionSpanPages)
+        for (let i = 0; i < oldKeys.length; ++i) {
+            const p = parseInt(oldKeys[i])
+            if (p < lo || p > hi)
+                pageItem(p)?.selection?.clear()
+        }
+        const newPages = {}
+        let combinedText = ""
+        for (let p = lo; p <= hi; ++p) {
+            const sz = root.document.pagePointSize(p)
+            const br = Qt.point(sz.width, sz.height)
+            let fromPt
+            let toPt
+            if (lo === hi) {
+                fromPt = anchorPt
+                toPt = focusPt
+            } else if (p === anchorPage) {
+                fromPt = anchorPt
+                toPt = forward ? br : Qt.point(0, 0)
+            } else if (p === focusPage) {
+                fromPt = forward ? Qt.point(0, 0) : focusPt
+                toPt = forward ? focusPt : br
+            } else {
+                fromPt = Qt.point(0, 0)
+                toPt = br
+            }
+            const sel = root.document.getSelection(p, fromPt, toPt)
+            newPages[p] = {
+                fromPt: Qt.point(fromPt.x * scale, fromPt.y * scale),
+                toPt: Qt.point(toPt.x * scale, toPt.y * scale)
+            }
+            if (sel.valid) {
+                if (combinedText.length > 0)
+                    combinedText += "\n"
+                combinedText += sel.text
+            }
+        }
+        root.selectionSpanPages = newPages
+        root.selectionSpanActive = lo !== hi
+        root.selectedText = combinedText
+        root.selectionPage = anchorPage
+        if (lo === hi) {
+            const item = pageItem(anchorPage)
+            root.selectionGeometry = item?.selection?.geometry ?? []
+        } else {
+            root.selectionGeometry = []
+        }
+        return combinedText.length > 0 || lo === hi
     }
 
     function isWordChar(ch) {
@@ -118,13 +197,18 @@ Item {
             root.clearSelection()
             return false
         }
-        if (root.selectionPage >= 0 && root.selectionPage !== pageIndex)
-            pageItem(root.selectionPage)?.selection?.clear()
+        root.clearSpanPageSelections()
         const rect = pdfSel.boundingRectangle
-        root.selectionFromPt = Qt.point(rect.x * pageScale, rect.y * pageScale)
-        root.selectionToPt = Qt.point((rect.x + rect.width) * pageScale, (rect.y + rect.height) * pageScale)
-        root.selectionEditPage = pageIndex
-        root.selectionPointsHeld = true
+        root.selectionSpanPages = ({
+            [pageIndex]: {
+                fromPt: Qt.point(rect.x * pageScale, rect.y * pageScale),
+                toPt: Qt.point((rect.x + rect.width) * pageScale, (rect.y + rect.height) * pageScale)
+            }
+        })
+        root.selectionSpanActive = false
+        root.selectedText = pdfSel.text
+        root.selectionPage = pageIndex
+        root.selectionGeometry = pdfSel.bounds
         return true
     }
 
@@ -183,11 +267,11 @@ Item {
     }
 
     function extendSelectionFromAnchor(pageIndex, itemX, itemY, pageScale) {
-        if (!root.selectionAnchorValid || root.selectionAnchorPage !== pageIndex)
+        if (!root.selectionAnchorValid)
             return false
         const endPt = Qt.point(itemX / pageScale, itemY / pageScale)
-        const span = root.document.getSelection(pageIndex, root.selectionAnchorPoint, endPt)
-        return root.applyPdfSelection(pageIndex, span, pageScale)
+        return root.updateSpanSelection(root.selectionAnchorPage, root.selectionAnchorPoint,
+                                        pageIndex, endPt)
     }
 
     function annotFill(hex) {
@@ -207,10 +291,27 @@ Item {
         \sa copySelectionToClipboard()
     */
     function selectAll() {
-        const item = pageItem(pageNavigator.currentPage)
-            ?? tableView.itemAtCell(tableView.cellAtPos(root.width / 2, root.height / 2))
-        const pdfSelection = item?.selection as PdfSelection
-        pdfSelection?.selectAll()
+        const page = pageNavigator.currentPage
+        if (page < 0)
+            return
+        const all = root.document.getAllText(page)
+        if (!all.valid)
+            return
+        const sz = root.document.pagePointSize(page)
+        const scale = root.renderScale
+        root.clearSpanPageSelections()
+        root.selectionSpanPages = ({
+            [page]: {
+                fromPt: Qt.point(0, 0),
+                toPt: Qt.point(sz.width * scale, sz.height * scale)
+            }
+        })
+        root.selectionSpanActive = false
+        root.selectedText = all.text
+        root.selectionPage = page
+        root.selectionGeometry = all.bounds
+        root.setSelectionAnchor(page, 0, 0, scale)
+        app.copyTextToSelection(all.text)
     }
 
     /*!
@@ -566,6 +667,13 @@ Item {
                                      image.width.toFixed(1) + "x" + image.height.toFixed(1)
             }
             property alias selection: selection
+            function viewToPaperPoint(viewX, viewY) {
+                const onHolder = pageHolder.mapFromItem(tableView, viewX, viewY)
+                return paper.mapFromItem(pageHolder, onHolder.x, onHolder.y)
+            }
+            function paperToPagePoint(paperX, paperY) {
+                return Qt.point(paperX / paper.pageScale, paperY / paper.pageScale)
+            }
             Rectangle {
                 id: paper
                 width: image.width
@@ -619,7 +727,7 @@ Item {
                 Shape {
                     anchors.fill: parent
                     visible: image.status === Image.Ready
-                             && root.selectionPage === pageHolder.index
+                             && root.selectionSpanPages[pageHolder.index] !== undefined
                              && root.selectedText.length > 0
                              && (!tableView.moving || textSelectionDrag.active)
                     ShapePath {
@@ -792,30 +900,45 @@ Item {
                             singleClickClear.stop()
                             extendSelection = (centroid.modifiers & Qt.ShiftModifier)
                                               && root.selectionAnchorValid
-                                              && root.selectionAnchorPage === pageHolder.index
-                            if (!extendSelection)
-                                root.selectionPointsHeld = false
-                            if (!extendSelection)
+                            if (!extendSelection) {
+                                root.clearSelection()
                                 root.setSelectionAnchor(pageHolder.index,
                                                         centroid.pressPosition.x,
                                                         centroid.pressPosition.y,
                                                         paper.pageScale)
+                                root.selectionDragAnchorPage = pageHolder.index
+                                root.selectionDragAnchorPoint = root.selectionAnchorPoint
+                            } else {
+                                root.selectionDragAnchorPage = root.selectionAnchorPage
+                                root.selectionDragAnchorPoint = root.selectionAnchorPoint
+                            }
+                            const pressPt = Qt.point(centroid.pressPosition.x / paper.pageScale,
+                                                     centroid.pressPosition.y / paper.pageScale)
+                            root.updateSpanSelection(root.selectionDragAnchorPage,
+                                                     root.selectionDragAnchorPoint,
+                                                     pageHolder.index, pressPt)
                             return
                         }
-                        if (selection.text.length)
-                            app.copyTextToSelection(selection.text)
+                        if (root.selectedText.length)
+                            app.copyTextToSelection(root.selectedText)
                     }
                     onCentroidChanged: {
                         if (!active)
                             return
-                        const p = paper.mapToItem(tableView, centroid.position.x, centroid.position.y)
+                        const viewPt = paper.mapToItem(tableView, centroid.position.x, centroid.position.y)
                         const margin = 40
                         const step = 14
-                        if (p.y < margin)
+                        if (viewPt.y < margin)
                             tableView.contentY = Math.max(0, tableView.contentY - step)
-                        else if (p.y > tableView.height - margin)
+                        else if (viewPt.y > tableView.height - margin)
                             tableView.contentY = Math.min(tableView.contentHeight - tableView.height,
                                                           tableView.contentY + step)
+                        const focus = root.resolveFocusFromView(viewPt.x, viewPt.y,
+                                                                pageHolder.index,
+                                                                root.selectionDragAnchorPoint)
+                        root.updateSpanSelection(root.selectionDragAnchorPage,
+                                                 root.selectionDragAnchorPoint,
+                                                 focus.page, focus.point)
                     }
                 }
                 TapHandler {
@@ -900,34 +1023,27 @@ Item {
                     page: pageHolder.index
                     renderScale: root.renderScale
                     from: {
-                        if (textSelectionDrag.active) {
-                            if (textSelectionDrag.extendSelection)
-                                return Qt.point(root.selectionAnchorItemX, root.selectionAnchorItemY)
-                            return textSelectionDrag.centroid.pressPosition
-                        }
-                        if (root.selectionPointsHeld && root.selectionEditPage === pageHolder.index)
-                            return root.selectionFromPt
-                        return textSelectionDrag.centroid.pressPosition
+                        const span = root.selectionSpanPages[pageHolder.index]
+                        if (span !== undefined)
+                            return span.fromPt
+                        return Qt.point(0, 0)
                     }
                     to: {
-                        if (textSelectionDrag.active)
-                            return textSelectionDrag.centroid.position
-                        if (root.selectionPointsHeld && root.selectionEditPage === pageHolder.index)
-                            return root.selectionToPt
-                        return textSelectionDrag.centroid.position
+                        const span = root.selectionSpanPages[pageHolder.index]
+                        if (span !== undefined)
+                            return span.toPt
+                        return Qt.point(0, 0)
                     }
-                    hold: !textSelectionDrag.active && !mouseClickHandler.pressed
+                    hold: true
                     onTextChanged: {
-                        if (page !== root.selectionPage && root.selectionPage >= 0) {
-                            const prev = root.pageItem(root.selectionPage)
-                            if (prev && prev !== pageHolder)
-                                prev.selection?.clear()
-                        }
-                        root.selectedText = text
-                        root.selectionPage = page
-                        root.selectionGeometry = geometry
-                        if (text.length && !textSelectionDrag.active)
+                        if (root.selectionSpanActive || textSelectionDrag.active)
+                            return
+                        if (text.length) {
+                            root.selectedText = text
+                            root.selectionPage = page
+                            root.selectionGeometry = geometry
                             app.copyTextToSelection(text)
+                        }
                     }
                     focus: true
                 }
