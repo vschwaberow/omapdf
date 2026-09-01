@@ -29,6 +29,7 @@ private slots:
   void scrollWindowFullPageRendersInk();
   void neighborWarmupThenFullPageUnderBudget();
   void fullPageRasterMatchesViewerCap();
+  void firstPageInkUnderBudget();
 };
 
 static bool imageHasInk(const QImage &image) {
@@ -374,6 +375,44 @@ void ReadingGateTest::fullPageRasterMatchesViewerCap() {
   QCOMPARE(page.size(), pageSize);
   qInfo("PdfPageImage-contract raster %dx%d with ink", page.width(),
         page.height());
+}
+
+
+void ReadingGateTest::firstPageInkUnderBudget() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString path = dir.filePath(QStringLiteral("gate_cold.pdf"));
+  QVERIFY(writeTextPdf(path, 20, QByteArrayLiteral("omapdf-cold")));
+
+  QElapsedTimer wall;
+  wall.start();
+
+  QPdfDocument doc;
+  QCOMPARE(doc.load(path), QPdfDocument::Error::None);
+
+  QPdfPageRenderer renderer;
+  renderer.setDocument(&doc);
+  renderer.setRenderMode(QPdfPageRenderer::RenderMode::MultiThreaded);
+
+  const QSize pageSize = viewerPageRasterSize(doc.pagePointSize(0), 1.0, 1.0);
+  bool ok = false;
+  QEventLoop loop;
+  const auto conn = QObject::connect(
+      &renderer, &QPdfPageRenderer::pageRendered, &loop,
+      [&](int, QSize, const QImage &image, QPdfDocumentRenderOptions, quint64) {
+        ok = imageHasInk(image);
+        loop.quit();
+      });
+  renderer.requestPage(0, pageSize);
+  QTimer::singleShot(10000, &loop, &QEventLoop::quit);
+  loop.exec();
+  QObject::disconnect(conn);
+
+  const double ms = wall.nsecsElapsed() / 1e6;
+  qInfo("Cold first-page ink %.3f ms (budget 500 ms) @ %dx%d", ms,
+        pageSize.width(), pageSize.height());
+  QVERIFY2(ok, "blank first page");
+  QVERIFY2(ms < 500.0, qPrintable(QStringLiteral("cold start %1 ms").arg(ms)));
 }
 
 QTEST_MAIN(ReadingGateTest)

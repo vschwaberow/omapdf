@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Disk/structure reload restores `contentY` with zoom and page (less scroll jump)
+
+### Added
+
+- `scripts/verify-l1-beauty.sh` and `scripts/verify-demo-ready.sh`
+- `docs/demo-script.md` launch recording outline
+- Reading gate cold first-page ink budget (500 ms)
+
 ## [0.2.2] - 2026-09-01
 
 ### Fixed
