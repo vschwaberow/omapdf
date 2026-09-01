@@ -61,10 +61,6 @@ qt_add_qml_module(omapdf
     src/app/AnnotStore.cpp
     src/app/PageWarmup.h
     src/app/PageWarmup.cpp
-    src/app/PageTileLayer.h
-    src/app/PageTileLayer.cpp
-    src/app/PageTileHub.h
-    src/app/PageTileHub.cpp
   QML_FILES
     qml/Main.qml
     qml/chrome/TabStrip.qml
@@ -153,10 +149,6 @@ qt_add_executable(omapdf_session_test tests/test_session_store.cpp)
 target_link_libraries(omapdf_session_test PRIVATE omapdf_core Qt6::Test)
 add_test(NAME session_store COMMAND omapdf_session_test)
 
-qt_add_executable(omapdf_page_tile_geometry_test tests/test_page_tile_geometry.cpp)
-target_link_libraries(omapdf_page_tile_geometry_test PRIVATE Qt6::Test Qt6::Gui)
-target_include_directories(omapdf_page_tile_geometry_test PRIVATE src)
-add_test(NAME page_tile_geometry COMMAND omapdf_page_tile_geometry_test)
 
 qt_add_executable(omapdf_viewer_page_image_test tests/test_viewer_page_image.cpp)
 target_link_libraries(omapdf_viewer_page_image_test PRIVATE Qt6::Test)

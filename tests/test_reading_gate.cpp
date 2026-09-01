@@ -2,22 +2,22 @@
 #include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFile>
+#include <QImage>
 #include <QPdfDocument>
+#include <QPdfDocumentRenderOptions>
 #include <QPdfPageNavigator>
 #include <QPdfPageRenderer>
-#include <QPdfDocumentRenderOptions>
 #include <QPdfSearchModel>
-#include <QImage>
-#include <QSize>
 #include <QPointF>
 #include <QSignalSpy>
+#include <QSize>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTimer>
 
 #include <algorithm>
-#include <ranges>
 #include <cmath>
+#include <ranges>
 #include <vector>
 
 class ReadingGateTest : public QObject {
@@ -26,12 +26,10 @@ class ReadingGateTest : public QObject {
 private slots:
   void jumpP95UnderBudget();
   void searchKeystrokeUnderBudget();
-  void scrollWindowRendersComplete();
-  void idleSharpenUnderBudget();
-  void viewportTileClipRendersInk();
-  void viewportTilesUnderBudget();
+  void scrollWindowFullPageRendersInk();
+  void neighborWarmupThenFullPageUnderBudget();
+  void fullPageRasterMatchesViewerCap();
 };
-
 
 static bool imageHasInk(const QImage &image) {
   if (image.isNull() || image.width() <= 0 || image.height() <= 0) {
@@ -125,6 +123,21 @@ static bool writeTextPdf(const QString &path, int pageCount,
   return f.write(out) == out.size();
 }
 
+// Matches OmapdfMultiPageView PdfPageImage applySourceSize cap.
+static QSize viewerPageRasterSize(QSizeF pagePointSize, qreal renderScale,
+                                  qreal dpr) {
+  constexpr int kMaxEdge = 4096;
+  qreal w = pagePointSize.width() * renderScale * dpr;
+  if (w > kMaxEdge) {
+    w = kMaxEdge;
+  }
+  const qreal aspect =
+      pagePointSize.height() / qMax(qreal(1), pagePointSize.width());
+  const int iw = qMax(1, qRound(w));
+  const int ih = qMax(1, qRound(iw * aspect));
+  return QSize(iw, ih);
+}
+
 void ReadingGateTest::jumpP95UnderBudget() {
   QTemporaryDir dir;
   QVERIFY(dir.isValid());
@@ -189,8 +202,7 @@ void ReadingGateTest::searchKeystrokeUnderBudget() {
   QVERIFY(search.count() >= 1);
 }
 
-
-void ReadingGateTest::scrollWindowRendersComplete() {
+void ReadingGateTest::scrollWindowFullPageRendersInk() {
   QTemporaryDir dir;
   QVERIFY(dir.isValid());
   const QString path = dir.filePath(QStringLiteral("gate_200.pdf"));
@@ -206,7 +218,8 @@ void ReadingGateTest::scrollWindowRendersComplete() {
 
   constexpr int kWindow = 4;
   constexpr int kStride = 2;
-  const QSize tile(720, 960);
+  const QSize pageSize =
+      viewerPageRasterSize(doc.pagePointSize(0), 1.0, 1.0);
   std::vector<qint64> windowSamples;
   QElapsedTimer timer;
 
@@ -226,25 +239,25 @@ void ReadingGateTest::scrollWindowRendersComplete() {
         });
     timer.restart();
     for (int i = 0; i < kWindow; ++i) {
-      renderer.requestPage(startPage + i, tile);
+      renderer.requestPage(startPage + i, pageSize);
     }
     QTimer::singleShot(10000, &loop, &QEventLoop::quit);
     loop.exec();
     QObject::disconnect(conn);
-    QVERIFY2(imagesOk, "blank or empty page tile");
+    QVERIFY2(imagesOk, "blank or empty full-page raster");
     QCOMPARE(remaining, 0);
     windowSamples.push_back(timer.nsecsElapsed() / 1000);
   }
 
   const double p95ms = static_cast<double>(p95Micros(windowSamples)) / 1000.0;
-  qInfo("AZ2 scroll-window render+ink p95=%.3f ms over %zu windows (4 pages @ 720x960)",
-        p95ms, windowSamples.size());
+  qInfo("AZ2 scroll-window full-page render+ink p95=%.3f ms over %zu windows "
+        "(4 pages @ %dx%d)",
+        p95ms, windowSamples.size(), pageSize.width(), pageSize.height());
   QVERIFY2(p95ms < 1000.0,
            qPrintable(QStringLiteral("scroll window p95 %1 ms").arg(p95ms)));
 }
 
-
-void ReadingGateTest::idleSharpenUnderBudget() {
+void ReadingGateTest::neighborWarmupThenFullPageUnderBudget() {
   QTemporaryDir dir;
   QVERIFY(dir.isValid());
   const QString path = dir.filePath(QStringLiteral("gate_200.pdf"));
@@ -259,9 +272,10 @@ void ReadingGateTest::idleSharpenUnderBudget() {
 
   constexpr int kWindow = 4;
   constexpr int kStride = 8;
-  const QSize coarse(360, 480);
-  const QSize sharp(720, 960);
-  std::vector<qint64> sharpenSamples;
+  const QSize warmSize(360, 480);
+  const QSize pageSize =
+      viewerPageRasterSize(doc.pagePointSize(0), 1.0, 1.0);
+  std::vector<qint64> samples;
   QElapsedTimer timer;
 
   for (int startPage = 0; startPage + kWindow <= 200; startPage += kStride) {
@@ -275,7 +289,7 @@ void ReadingGateTest::idleSharpenUnderBudget() {
           }
         });
     for (int i = 0; i < kWindow; ++i) {
-      renderer.requestPage(startPage + i, coarse);
+      renderer.requestPage(startPage + i, warmSize);
     }
     QTimer::singleShot(10000, &warm, &QEventLoop::quit);
     warm.exec();
@@ -287,8 +301,9 @@ void ReadingGateTest::idleSharpenUnderBudget() {
     QEventLoop loop;
     const auto conn = QObject::connect(
         &renderer, &QPdfPageRenderer::pageRendered, &loop,
-        [&](int, QSize size, const QImage &image, QPdfDocumentRenderOptions, quint64) {
-          if (size != sharp) {
+        [&](int, QSize size, const QImage &image, QPdfDocumentRenderOptions,
+            quint64) {
+          if (size != pageSize) {
             return;
           }
           if (!imageHasInk(image)) {
@@ -300,126 +315,66 @@ void ReadingGateTest::idleSharpenUnderBudget() {
         });
     timer.restart();
     for (int i = 0; i < kWindow; ++i) {
-      renderer.requestPage(startPage + i, sharp);
+      renderer.requestPage(startPage + i, pageSize);
     }
     QTimer::singleShot(10000, &loop, &QEventLoop::quit);
     loop.exec();
     QObject::disconnect(conn);
-    QVERIFY2(imagesOk, "blank sharpen tile");
-    QCOMPARE(remaining, 0);
-    sharpenSamples.push_back(timer.nsecsElapsed() / 1000);
-  }
-
-  const double p95ms = static_cast<double>(p95Micros(sharpenSamples)) / 1000.0;
-  qInfo("A1 idle-sharpen p95=%.3f ms over %zu windows (coarse then sharp)",
-        p95ms, sharpenSamples.size());
-  QVERIFY2(p95ms < 1000.0,
-           qPrintable(QStringLiteral("idle sharpen p95 %1 ms").arg(p95ms)));
-}
-
-
-void ReadingGateTest::viewportTileClipRendersInk() {
-  QTemporaryDir dir;
-  QVERIFY(dir.isValid());
-  const QString path = dir.filePath(QStringLiteral("gate_tiles.pdf"));
-  QVERIFY(writeTextPdf(path, 4, QByteArrayLiteral("omapdf-tile")));
-
-  QPdfDocument doc;
-  QCOMPARE(doc.load(path), QPdfDocument::Error::None);
-
-  QPdfPageRenderer renderer;
-  renderer.setDocument(&doc);
-  renderer.setRenderMode(QPdfPageRenderer::RenderMode::MultiThreaded);
-
-  const QSize scaled(1024, 1400);
-  const QRect clip(0, 0, 512, 512);
-  QPdfDocumentRenderOptions opts;
-  opts.setScaledSize(scaled);
-  opts.setScaledClipRect(clip);
-
-  bool ok = false;
-  QImage tile;
-  QEventLoop loop;
-  const auto conn = QObject::connect(
-      &renderer, &QPdfPageRenderer::pageRendered, &loop,
-      [&](int, QSize, const QImage &image, QPdfDocumentRenderOptions, quint64) {
-        tile = image;
-        ok = imageHasInk(image);
-        loop.quit();
-      });
-  renderer.requestPage(0, clip.size(), opts);
-  QTimer::singleShot(10000, &loop, &QEventLoop::quit);
-  loop.exec();
-  QObject::disconnect(conn);
-
-  QVERIFY2(ok, "blank clipped tile");
-  QCOMPARE(tile.size(), clip.size());
-  qInfo("D1 viewport-tile clip rendered %dx%d with ink", tile.width(),
-        tile.height());
-}
-
-
-
-void ReadingGateTest::viewportTilesUnderBudget() {
-  QTemporaryDir dir;
-  QVERIFY(dir.isValid());
-  const QString path = dir.filePath(QStringLiteral("gate_viewport_tiles.pdf"));
-  QVERIFY(writeTextPdf(path, 8, QByteArrayLiteral("omapdf-vtiles")));
-
-  QPdfDocument doc;
-  QCOMPARE(doc.load(path), QPdfDocument::Error::None);
-
-  QPdfPageRenderer renderer;
-  renderer.setDocument(&doc);
-  renderer.setRenderMode(QPdfPageRenderer::RenderMode::MultiThreaded);
-
-  const QSize scaled(1024, 1400);
-  const int tile = 512;
-  const QRect clips[] = {
-      QRect(0, 0, tile, tile),
-      QRect(tile, 0, tile, tile),
-      QRect(0, tile, tile, tile),
-      QRect(tile, tile, tile, tile),
-  };
-
-  std::vector<qint64> samples;
-  QElapsedTimer timer;
-  for (int page = 0; page < 8; ++page) {
-    int remaining = 4;
-    bool imagesOk = true;
-    QEventLoop loop;
-    const auto conn = QObject::connect(
-        &renderer, &QPdfPageRenderer::pageRendered, &loop,
-        [&](int, QSize, const QImage &image, QPdfDocumentRenderOptions, quint64) {
-          if (!imageHasInk(image) || image.size() != QSize(tile, tile)) {
-            imagesOk = false;
-          }
-          if (--remaining == 0) {
-            loop.quit();
-          }
-        });
-    timer.restart();
-    for (const QRect &clip : clips) {
-      QPdfDocumentRenderOptions opts;
-      opts.setScaledSize(scaled);
-      opts.setScaledClipRect(clip);
-      renderer.requestPage(page, clip.size(), opts);
-    }
-    QTimer::singleShot(10000, &loop, &QEventLoop::quit);
-    loop.exec();
-    QObject::disconnect(conn);
-    QVERIFY2(imagesOk, "blank or wrong-size viewport tile");
+    QVERIFY2(imagesOk, "blank full-page after warmup");
     QCOMPARE(remaining, 0);
     samples.push_back(timer.nsecsElapsed() / 1000);
   }
 
   const double p95ms = static_cast<double>(p95Micros(samples)) / 1000.0;
-  qInfo("D1 viewport-tiles (4x512) p95=%.3f ms over %zu pages", p95ms,
+  qInfo("A1 neighbor-warmup then full-page p95=%.3f ms over %zu windows", p95ms,
         samples.size());
   QVERIFY2(p95ms < 1000.0,
-           qPrintable(QStringLiteral("viewport tiles p95 %1 ms").arg(p95ms)));
+           qPrintable(QStringLiteral("warmup+full page p95 %1 ms").arg(p95ms)));
 }
 
+void ReadingGateTest::fullPageRasterMatchesViewerCap() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString path = dir.filePath(QStringLiteral("gate_cap.pdf"));
+  QVERIFY(writeTextPdf(path, 2, QByteArrayLiteral("omapdf-cap")));
+
+  QPdfDocument doc;
+  QCOMPARE(doc.load(path), QPdfDocument::Error::None);
+
+  const QSize capped =
+      viewerPageRasterSize(QSizeF(3000, 4000), 2.0, 2.0);
+  QVERIFY(capped.width() <= 4096);
+  QVERIFY(capped.width() > 0);
+  QVERIFY(capped.height() > 0);
+
+  QPdfPageRenderer renderer;
+  renderer.setDocument(&doc);
+  renderer.setRenderMode(QPdfPageRenderer::RenderMode::MultiThreaded);
+
+  const QSize pageSize =
+      viewerPageRasterSize(doc.pagePointSize(0), 1.0, 2.0);
+  QVERIFY(pageSize.width() <= 4096);
+
+  bool ok = false;
+  QImage page;
+  QEventLoop loop;
+  const auto conn = QObject::connect(
+      &renderer, &QPdfPageRenderer::pageRendered, &loop,
+      [&](int, QSize, const QImage &image, QPdfDocumentRenderOptions, quint64) {
+        page = image;
+        ok = imageHasInk(image);
+        loop.quit();
+      });
+  renderer.requestPage(0, pageSize);
+  QTimer::singleShot(10000, &loop, &QEventLoop::quit);
+  loop.exec();
+  QObject::disconnect(conn);
+
+  QVERIFY2(ok, "blank full-page viewer raster");
+  QCOMPARE(page.size(), pageSize);
+  qInfo("PdfPageImage-contract raster %dx%d with ink", page.width(),
+        page.height());
+}
 
 QTEST_MAIN(ReadingGateTest)
 #include "test_reading_gate.moc"
