@@ -20,6 +20,7 @@ Item {
     readonly property real renderScale: view.renderScale
     property int pendingRestorePage: -1
     property real pendingRestoreZoom: 0
+    property real pendingRestoreScrollY: 0
     property bool structureReload: false
     property bool structureAwaiting: false
     property bool structureNeedsReload: false
@@ -119,7 +120,7 @@ Item {
 
     Timer {
         id: zoomDebounce
-        interval: 40
+        interval: 80
         onTriggered: {
             view.renderScale = Math.max(0.25, Math.min(4, view.renderScale * root.pendingZoomFactor))
             root.pendingZoomFactor = 1
@@ -153,6 +154,7 @@ Item {
             persistState()
             pendingRestorePage = view.currentPage
             pendingRestoreZoom = view.renderScale
+            pendingRestoreScrollY = view.contentY
             structureReload = true
         }
         closeDocument()
@@ -260,6 +262,7 @@ Item {
             persistState()
             structurePendingPage = restorePage
             structurePendingZoom = restoreZoom
+            pendingRestoreScrollY = view.contentY
             closeDocument()
         }
         structureAwaiting = true
@@ -380,7 +383,13 @@ Item {
                     root.pendingRestoreZoom = 0
                     const page = Math.max(0, Math.min(root.pendingRestorePage, doc.pageCount - 1))
                     root.pendingRestorePage = -1
-                    Qt.callLater(() => view.goToPage(page))
+                    const scrollY = root.pendingRestoreScrollY
+                    root.pendingRestoreScrollY = 0
+                    Qt.callLater(() => {
+                        view.goToPage(page)
+                        if (scrollY > 0)
+                            Qt.callLater(() => view.setContentY(scrollY))
+                    })
                     Qt.callLater(() => {
                         root.bookmarkCount = bookmarkModel.rowCount()
                         root.bookmarksAvailable(root.bookmarkCount)

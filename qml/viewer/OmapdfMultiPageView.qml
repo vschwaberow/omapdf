@@ -463,28 +463,35 @@ Item {
                 HoverHandler {
                     cursorShape: Qt.IBeamCursor
                 }
-                PageTileLayer {
+                PdfPageImage {
                     id: image
                     document: root.document
-                    page: pageHolder.index
-                    renderScale: root.renderScale
-                    paused: tableView.moving
+                    currentFrame: pageHolder.index
+                    asynchronous: true
+                    fillMode: Image.PreserveAspectFit
                     width: paper.pagePointSize.width * root.renderScale
                     height: paper.pagePointSize.height * root.renderScale
-                    devicePixelRatio: tableView.sharpRender
-                                      ? Screen.devicePixelRatio
-                                      : Math.min(1.0, Screen.devicePixelRatio * 0.75)
-                    visibleRect: {
-                        void tableView.contentX
-                        void tableView.contentY
-                        void tableView.width
-                        void tableView.height
-                        const tl = mapFromItem(tableView, 0, 0)
-                        const br = mapFromItem(tableView, tableView.width, tableView.height)
-                        return Qt.rect(tl.x, tl.y, br.x - tl.x, br.y - tl.y)
+                    property real renderScale: root.renderScale
+                    function applySourceSize() {
+                        let w = paper.pagePointSize.width * renderScale * Screen.devicePixelRatio
+                        const maxEdge = 4096
+                        if (w > maxEdge)
+                            w = maxEdge
+                        w = Math.round(w)
+                        if (image.sourceSize.width === w)
+                            return
+                        image.sourceSize.width = w
+                        image.sourceSize.height = 0
                     }
+                    Timer {
+                        id: sharpenZoom
+                        interval: 120
+                        onTriggered: image.applySourceSize()
+                    }
+                    Component.onCompleted: applySourceSize()
                     onRenderScaleChanged: {
                         paper.scale = 1
+                        sharpenZoom.restart()
                         if (!pinch.active && !tableView.moving)
                             searchHighlights.update()
                     }

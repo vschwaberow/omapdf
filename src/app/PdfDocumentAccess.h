@@ -2,10 +2,15 @@
 
 #include <QObject>
 #include <QPdfDocument>
+#include <QPointer>
 
-[[nodiscard]] inline QPdfDocument *pdfDocumentFrom(QObject *object) {
+[[nodiscard]] inline QPointer<QPdfDocument> pdfDocumentPtr(QObject *object) {
   if (object == nullptr) {
-    return nullptr;
+    return {};
+  }
+  const QPointer<QObject> owner(object);
+  if (owner.isNull()) {
+    return {};
   }
   if (auto *doc = qobject_cast<QPdfDocument *>(object)) {
     return doc;
@@ -16,5 +21,8 @@
     return direct.constFirst();
   }
   const auto nested = object->findChildren<QPdfDocument *>();
-  return nested.isEmpty() ? nullptr : nested.constFirst();
+  if (nested.isEmpty()) {
+    return {};
+  }
+  return nested.constFirst();
 }

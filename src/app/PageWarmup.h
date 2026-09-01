@@ -1,12 +1,14 @@
 #pragma once
 
+#include "app/PdfDocumentBinding.h"
+
 #include <QtQml/qqmlregistration.h>
 
 #include <QObject>
-#include <QMetaObject>
+#include <QPdfDocument>
 #include <QSize>
+#include <memory>
 
-class QPdfDocument;
 class QPdfPageRenderer;
 
 class PageWarmup : public QObject {
@@ -23,7 +25,7 @@ public:
   explicit PageWarmup(QObject *parent = nullptr);
   ~PageWarmup() override;
 
-  [[nodiscard]] QObject *document() const { return m_documentObj; }
+  [[nodiscard]] QObject *document() const { return m_document.source(); }
   void setDocument(QObject *document);
 
   [[nodiscard]] int currentPage() const { return m_currentPage; }
@@ -41,17 +43,13 @@ signals:
   void tileSizeChanged();
   void pausedChanged();
 
-private slots:
-  void onDocumentStatus();
-
 private:
-  void resolveDocument();
   void warmNeighborhood();
+  void clearPdf();
+  void onPdfStatus(QPdfDocument::Status status);
 
-  QObject *m_documentObj{nullptr};
-  QPdfDocument *m_pdf{nullptr};
-  QMetaObject::Connection m_statusConn;
-  QPdfPageRenderer *m_renderer{nullptr};
+  PdfDocumentBinding m_document;
+  std::unique_ptr<QPdfPageRenderer> m_renderer;
   int m_currentPage{-1};
   QSize m_tileSize{720, 960};
   bool m_paused{false};

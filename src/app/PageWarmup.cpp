@@ -1,23 +1,23 @@
 #include "app/PageWarmup.h"
 
-#include "app/PdfDocumentAccess.h"
+#include "app/DocumentLimits.h"
 
-#include <QPdfDocument>
 #include <QPdfPageRenderer>
 
 PageWarmup::PageWarmup(QObject *parent) : QObject(parent) {
-  m_renderer = new QPdfPageRenderer(this);
+  m_renderer = std::make_unique<QPdfPageRenderer>();
   m_renderer->setRenderMode(QPdfPageRenderer::RenderMode::MultiThreaded);
 }
 
-PageWarmup::~PageWarmup() = default;
+PageWarmup::~PageWarmup() { clearPdf(); }
 
 void PageWarmup::setDocument(QObject *document) {
-  if (m_documentObj == document) {
+  if (m_document.source() == document) {
     return;
   }
-  m_documentObj = document;
-  resolveDocument();
+  clearPdf();
+  m_document.bind(document, this, &PageWarmup::onPdfStatus);
+  m_renderer->setDocument(m_document.document());
   emit documentChanged();
   warmNeighborhood();
 }
@@ -28,7 +28,6 @@ void PageWarmup::setCurrentPage(int page) {
   }
   m_currentPage = page;
   emit currentPageChanged();
-  resolveDocument();
   warmNeighborhood();
 }
 
@@ -52,37 +51,27 @@ void PageWarmup::setPaused(bool paused) {
   }
 }
 
-void PageWarmup::onDocumentStatus() {
-  resolveDocument();
-  warmNeighborhood();
+void PageWarmup::clearPdf() {
+  m_renderer->setDocument(nullptr);
+  m_document.clear();
 }
 
-void PageWarmup::resolveDocument() {
-  if (m_statusConn) {
-    QObject::disconnect(m_statusConn);
-    m_statusConn = {};
-  }
-  m_pdf = pdfDocumentFrom(m_documentObj);
-  m_renderer->setDocument(m_pdf);
-  if (m_pdf == nullptr) {
+void PageWarmup::onPdfStatus(QPdfDocument::Status status) {
+  if (status == QPdfDocument::Status::Ready) {
+    warmNeighborhood();
     return;
   }
-  m_statusConn = QObject::connect(m_pdf, &QPdfDocument::statusChanged, this,
-                                  &PageWarmup::onDocumentStatus);
+  clearPdf();
 }
 
 void PageWarmup::warmNeighborhood() {
-  if (m_paused) {
+  if (m_paused || !m_document.isReady() || m_currentPage < 0) {
     return;
   }
-  if (!m_pdf || m_pdf->status() != QPdfDocument::Status::Ready) {
-    return;
-  }
-  if (m_currentPage < 0) {
-    return;
-  }
-  const int count = m_pdf->pageCount();
-  for (int delta = -2; delta <= 2; ++delta) {
+  QPdfDocument *pdf = m_document.document();
+  const int count = pdf->pageCount();
+  for (int delta = -omapdf::kWarmupPageRadius; delta <= omapdf::kWarmupPageRadius;
+       ++delta) {
     if (delta == 0) {
       continue;
     }

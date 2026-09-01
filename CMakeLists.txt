@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(omapdf VERSION 0.2.1 LANGUAGES CXX)
+project(omapdf VERSION 0.2.2 LANGUAGES CXX)
 
 configure_file(
   ${CMAKE_SOURCE_DIR}/src/version.h.in
@@ -61,10 +61,6 @@ qt_add_qml_module(omapdf
     src/app/AnnotStore.cpp
     src/app/PageWarmup.h
     src/app/PageWarmup.cpp
-    src/app/PageTileLayer.h
-    src/app/PageTileLayer.cpp
-    src/app/PageTileHub.h
-    src/app/PageTileHub.cpp
   QML_FILES
     qml/Main.qml
     qml/chrome/TabStrip.qml
@@ -152,6 +148,14 @@ add_test(NAME app_controller COMMAND omapdf_app_controller_test)
 qt_add_executable(omapdf_session_test tests/test_session_store.cpp)
 target_link_libraries(omapdf_session_test PRIVATE omapdf_core Qt6::Test)
 add_test(NAME session_store COMMAND omapdf_session_test)
+
+
+qt_add_executable(omapdf_viewer_page_image_test tests/test_viewer_page_image.cpp)
+target_link_libraries(omapdf_viewer_page_image_test PRIVATE Qt6::Test)
+target_compile_definitions(omapdf_viewer_page_image_test PRIVATE OMAPDF_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME viewer_page_image COMMAND omapdf_viewer_page_image_test)
+
+add_test(NAME l1_beauty COMMAND ${CMAKE_SOURCE_DIR}/scripts/verify-l1-beauty.sh)
 
 
 
