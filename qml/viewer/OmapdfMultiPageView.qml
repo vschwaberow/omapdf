@@ -55,6 +55,15 @@ Item {
     readonly property bool viewMoving: tableView.moving
     property real lastTapX: 0
     property real lastTapY: 0
+    property int selectionAnchorPage: -1
+    property point selectionAnchorPoint: Qt.point(0, 0)
+    property real selectionAnchorItemX: 0
+    property real selectionAnchorItemY: 0
+    property bool selectionAnchorValid: false
+    property int selectionEditPage: -1
+    property point selectionFromPt: Qt.point(0, 0)
+    property point selectionToPt: Qt.point(0, 0)
+    property bool selectionPointsHeld: false
 
     signal copySucceeded()
 
@@ -74,6 +83,111 @@ Item {
             text: root.selectedText,
             geometry: root.selectionGeometry
         }
+    }
+
+
+    function clearSelection() {
+        if (root.selectionPage >= 0) {
+            const prev = pageItem(root.selectionPage)
+            prev?.selection?.clear()
+        }
+        root.selectedText = ""
+        root.selectionPage = -1
+        root.selectionGeometry = []
+        root.selectionPointsHeld = false
+        root.selectionEditPage = -1
+    }
+
+    function isWordChar(ch) {
+        if (!ch || ch.length === 0)
+            return false
+        const code = ch.charCodeAt(0)
+        return code !== 32 && code !== 9 && code !== 10 && code !== 13 && code !== 160 && code !== 0
+    }
+
+    function setSelectionAnchor(page, itemX, itemY, pageScale) {
+        root.selectionAnchorPage = page
+        root.selectionAnchorPoint = Qt.point(itemX / pageScale, itemY / pageScale)
+        root.selectionAnchorItemX = itemX
+        root.selectionAnchorItemY = itemY
+        root.selectionAnchorValid = true
+    }
+
+    function applyPdfSelection(pageIndex, pdfSel, pageScale) {
+        if (!pdfSel || !pdfSel.valid) {
+            root.clearSelection()
+            return false
+        }
+        if (root.selectionPage >= 0 && root.selectionPage !== pageIndex)
+            pageItem(root.selectionPage)?.selection?.clear()
+        const rect = pdfSel.boundingRectangle
+        root.selectionFromPt = Qt.point(rect.x * pageScale, rect.y * pageScale)
+        root.selectionToPt = Qt.point((rect.x + rect.width) * pageScale, (rect.y + rect.height) * pageScale)
+        root.selectionEditPage = pageIndex
+        root.selectionPointsHeld = true
+        return true
+    }
+
+    function selectWordAt(pageIndex, itemX, itemY, pageScale) {
+        const pt = Qt.point(itemX / pageScale, itemY / pageScale)
+        const hit = root.document.getSelection(pageIndex, pt, pt)
+        if (!hit.valid)
+            return false
+        const all = root.document.getAllText(pageIndex)
+        if (!all.valid)
+            return false
+        const text = all.text
+        let i = hit.startIndex
+        if (i < 0 || i >= text.length)
+            return false
+        let start = i
+        let end = i + 1
+        while (start > 0 && root.isWordChar(text.charAt(start - 1)))
+            start--
+        while (end < text.length && root.isWordChar(text.charAt(end)))
+            end++
+        const word = root.document.getSelectionAtIndex(pageIndex, start, end - start)
+        if (!root.applyPdfSelection(pageIndex, word, pageScale))
+            return false
+        root.setSelectionAnchor(pageIndex, itemX, itemY, pageScale)
+        return true
+    }
+
+    function selectLineAt(pageIndex, itemX, itemY, pageScale) {
+        const pt = Qt.point(itemX / pageScale, itemY / pageScale)
+        const hit = root.document.getSelection(pageIndex, pt, pt)
+        if (!hit.valid)
+            return false
+        const all = root.document.getAllText(pageIndex)
+        if (!all.valid)
+            return false
+        const text = all.text
+        let i = hit.startIndex
+        if (i < 0 || i >= text.length)
+            return false
+        let start = i
+        let end = i + 1
+        while (start > 0 && text.charAt(start - 1) !== "
+" && text.charAt(start - 1) !== "
+")
+            start--
+        while (end < text.length && text.charAt(end) !== "
+" && text.charAt(end) !== "
+")
+            end++
+        const line = root.document.getSelectionAtIndex(pageIndex, start, end - start)
+        if (!root.applyPdfSelection(pageIndex, line, pageScale))
+            return false
+        root.setSelectionAnchor(pageIndex, itemX, itemY, pageScale)
+        return true
+    }
+
+    function extendSelectionFromAnchor(pageIndex, itemX, itemY, pageScale) {
+        if (!root.selectionAnchorValid || root.selectionAnchorPage !== pageIndex)
+            return false
+        const endPt = Qt.point(itemX / pageScale, itemY / pageScale)
+        const span = root.document.getSelection(pageIndex, root.selectionAnchorPoint, endPt)
+        return root.applyPdfSelection(pageIndex, span, pageScale)
     }
 
     function annotFill(hex) {
@@ -505,6 +619,7 @@ Item {
                 Shape {
                     anchors.fill: parent
                     visible: image.status === Image.Ready
+                             && root.selectionPage === pageHolder.index
                              && root.selectedText.length > 0
                              && (!tableView.moving || textSelectionDrag.active)
                     ShapePath {
@@ -669,13 +784,38 @@ Item {
                     id: textSelectionDrag
                     acceptedDevices: PointerDevice.Mouse | PointerDevice.Stylus
                     target: null
+                    property bool extendSelection: false
                     grabPermissions: PointerHandler.CanTakeOverFromItems
                                      | PointerHandler.ApprovesTakeOverByAnything
                     onActiveChanged: {
-                        if (active)
+                        if (active) {
+                            singleClickClear.stop()
+                            extendSelection = (centroid.modifiers & Qt.ShiftModifier)
+                                              && root.selectionAnchorValid
+                                              && root.selectionAnchorPage === pageHolder.index
+                            if (!extendSelection)
+                                root.selectionPointsHeld = false
+                            if (!extendSelection)
+                                root.setSelectionAnchor(pageHolder.index,
+                                                        centroid.pressPosition.x,
+                                                        centroid.pressPosition.y,
+                                                        paper.pageScale)
                             return
+                        }
                         if (selection.text.length)
                             app.copyTextToSelection(selection.text)
+                    }
+                    onCentroidChanged: {
+                        if (!active)
+                            return
+                        const p = paper.mapToItem(tableView, centroid.position.x, centroid.position.y)
+                        const margin = 40
+                        const step = 14
+                        if (p.y < margin)
+                            tableView.contentY = Math.max(0, tableView.contentY - step)
+                        else if (p.y > tableView.height - margin)
+                            tableView.contentY = Math.min(tableView.contentHeight - tableView.height,
+                                                          tableView.contentY + step)
                     }
                 }
                 TapHandler {
@@ -685,6 +825,31 @@ Item {
                         root.lastTapPage = pageHolder.index
                         root.lastTapX = eventPoint.position.x / paper.pageScale
                         root.lastTapY = eventPoint.position.y / paper.pageScale
+                        if (eventPoint.modifiers & Qt.ShiftModifier) {
+                            singleClickClear.stop()
+                            root.extendSelectionFromAnchor(pageHolder.index,
+                                                           eventPoint.position.x,
+                                                           eventPoint.position.y,
+                                                           paper.pageScale)
+                            return
+                        }
+                        if (tapCount >= 3) {
+                            singleClickClear.stop()
+                            root.selectLineAt(pageHolder.index,
+                                              eventPoint.position.x,
+                                              eventPoint.position.y,
+                                              paper.pageScale)
+                            return
+                        }
+                        if (tapCount === 2) {
+                            singleClickClear.stop()
+                            root.selectWordAt(pageHolder.index,
+                                              eventPoint.position.x,
+                                              eventPoint.position.y,
+                                              paper.pageScale)
+                            return
+                        }
+                        singleClickClear.restart()
                     }
                 }
                 TapHandler {
@@ -702,7 +867,7 @@ Item {
                         root.lastTapPage = pageHolder.index
                         root.lastTapX = eventPoint.position.x / paper.pageScale
                         root.lastTapY = eventPoint.position.y / paper.pageScale
-                        selection.clear()
+                        root.clearSelection()
                         selection.forceActiveFocus()
                     }
                 }
@@ -734,10 +899,30 @@ Item {
                     document: root.document
                     page: pageHolder.index
                     renderScale: root.renderScale
-                    from: textSelectionDrag.centroid.pressPosition
-                    to: textSelectionDrag.centroid.position
+                    from: {
+                        if (textSelectionDrag.active) {
+                            if (textSelectionDrag.extendSelection)
+                                return Qt.point(root.selectionAnchorItemX, root.selectionAnchorItemY)
+                            return textSelectionDrag.centroid.pressPosition
+                        }
+                        if (root.selectionPointsHeld && root.selectionEditPage === pageHolder.index)
+                            return root.selectionFromPt
+                        return textSelectionDrag.centroid.pressPosition
+                    }
+                    to: {
+                        if (textSelectionDrag.active)
+                            return textSelectionDrag.centroid.position
+                        if (root.selectionPointsHeld && root.selectionEditPage === pageHolder.index)
+                            return root.selectionToPt
+                        return textSelectionDrag.centroid.position
+                    }
                     hold: !textSelectionDrag.active && !mouseClickHandler.pressed
                     onTextChanged: {
+                        if (page !== root.selectionPage && root.selectionPage >= 0) {
+                            const prev = root.pageItem(root.selectionPage)
+                            if (prev && prev !== pageHolder)
+                                prev.selection?.clear()
+                        }
                         root.selectedText = text
                         root.selectionPage = page
                         root.selectionGeometry = geometry
@@ -869,12 +1054,22 @@ Item {
         function onRowsRemoved() { root.rebuildSearchHitPages() }
     }
 
+    Timer {
+        id: singleClickClear
+        interval: 250
+        onTriggered: root.clearSelection()
+    }
+
     Menu {
         id: selectionMenu
         MenuItem {
             text: qsTr("Copy")
             enabled: root.selectedText.length > 0
             onTriggered: root.copySelectionToClipboard()
+        }
+        MenuItem {
+            text: qsTr("Select All")
+            onTriggered: root.selectAll()
         }
     }
 }

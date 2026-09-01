@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Acrobat-style selection: word (double-click), line (triple-click), shift-extend, click-to-clear, edge auto-scroll
+- Selection highlight only on the active page
 - Mouse text selection no longer loses the grab to pinch / flick; selection highlight stays during drag
 - PdfSelection maps with page index and renderScale from the page holder
 

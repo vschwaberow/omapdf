@@ -60,7 +60,19 @@ Hit counter shows `i/n` in the search bar. No hit-list rail.
 | Print | Ctrl+P (system dialog) |
 | External link | Confirm dialog, then open |
 
-Drag with the mouse or stylus to select text (touch pinch is zoom-only). Selecting also fills the Linux primary selection (middle-click paste). Image-only / scanned pages have no text layer — search (`/`) shows whether text is available.
+Mouse and stylus selection follows common PDF reader habits (Acrobat-style):
+
+| Gesture | Action |
+|---------|--------|
+| Click | Clear selection |
+| Click-drag | Select text |
+| Double-click | Select word |
+| Triple-click | Select line |
+| Shift+click or Shift+drag | Extend from anchor |
+| Ctrl+C / Copy | Clipboard |
+| Ctrl+A / Select All | All text on current page |
+
+Auto-scrolls while dragging near the top or bottom edge. Touch pinch is zoom-only. Selecting also fills the Linux primary selection (middle-click paste). Image-only / scanned pages have no text layer — search (`/`) shows whether text is available.
 
 Password-protected PDFs prompt on open; cancel closes the tab. Wrong password retries with an error.
 
